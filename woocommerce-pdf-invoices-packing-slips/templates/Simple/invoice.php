@@ -6,13 +6,13 @@
 	<tr>
 		<td class="header">
 		<?php
-		if ( $this->has_header_logo() ) {
-			do_action( 'wpo_wcpdf_before_shop_logo', $this->get_type(), $this->order );
-			$this->header_logo();
-			do_action( 'wpo_wcpdf_after_shop_logo', $this->get_type(), $this->order );
-		} else {
-			$this->title();
-		}
+			if ( $this->has_header_logo() ) {
+				do_action( 'wpo_wcpdf_before_shop_logo', $this->get_type(), $this->order );
+				$this->header_logo();
+				do_action( 'wpo_wcpdf_after_shop_logo', $this->get_type(), $this->order );
+			} else {
+				$this->title();
+			}
 		?>
 		</td>
 		<td class="shop-info">
@@ -28,9 +28,9 @@
 
 <?php do_action( 'wpo_wcpdf_before_document_label', $this->get_type(), $this->order ); ?>
 
-<h1 class="document-type-label">
-	<?php if ( $this->has_header_logo() ) $this->title(); ?>
-</h1>
+<?php if ( $this->has_header_logo() ) : ?>
+	<h1 class="document-type-label"><?php $this->title(); ?></h1>
+<?php endif; ?>
 
 <?php do_action( 'wpo_wcpdf_after_document_label', $this->get_type(), $this->order ); ?>
 
@@ -83,10 +83,10 @@
 					<td><?php $this->order_date(); ?></td>
 				</tr>
 				<?php if ( $this->get_payment_method() ) : ?>
-				<tr class="payment-method">
-					<th><?php _e( 'Payment Method:', 'woocommerce-pdf-invoices-packing-slips' ); ?></th>
-					<td><?php $this->payment_method(); ?></td>
-				</tr>
+					<tr class="payment-method">
+						<th><?php _e( 'Payment Method:', 'woocommerce-pdf-invoices-packing-slips' ); ?></th>
+						<td><?php $this->payment_method(); ?></td>
+					</tr>
 				<?php endif; ?>
 				<?php do_action( 'wpo_wcpdf_after_order_data', $this->get_type(), $this->order ); ?>
 			</table>			
@@ -127,22 +127,22 @@
 	<tfoot>
 		<tr class="no-borders">
 			<td class="no-borders">
+				<?php do_action( 'wpo_wcpdf_before_document_notes', $this->get_type(), $this->order ); ?>
 				<div class="document-notes">
-					<?php do_action( 'wpo_wcpdf_before_document_notes', $this->get_type(), $this->order ); ?>
 					<?php if ( $this->get_document_notes() ) : ?>
 						<h3><?php _e( 'Notes', 'woocommerce-pdf-invoices-packing-slips' ); ?></h3>
 						<?php $this->document_notes(); ?>
 					<?php endif; ?>
-					<?php do_action( 'wpo_wcpdf_after_document_notes', $this->get_type(), $this->order ); ?>
 				</div>
+				<?php do_action( 'wpo_wcpdf_after_document_notes', $this->get_type(), $this->order ); ?>
+				<?php do_action( 'wpo_wcpdf_before_customer_notes', $this->get_type(), $this->order ); ?>
 				<div class="customer-notes">
-					<?php do_action( 'wpo_wcpdf_before_customer_notes', $this->get_type(), $this->order ); ?>
 					<?php if ( $this->get_shipping_notes() ) : ?>
 						<h3><?php _e( 'Customer Notes', 'woocommerce-pdf-invoices-packing-slips' ); ?></h3>
 						<?php $this->shipping_notes(); ?>
 					<?php endif; ?>
-					<?php do_action( 'wpo_wcpdf_after_customer_notes', $this->get_type(), $this->order ); ?>
-				</div>				
+				</div>
+				<?php do_action( 'wpo_wcpdf_after_customer_notes', $this->get_type(), $this->order ); ?>
 			</td>
 			<td class="no-borders" colspan="2">
 				<table class="totals">
@@ -165,11 +165,13 @@
 <?php do_action( 'wpo_wcpdf_after_order_details', $this->get_type(), $this->order ); ?>
 
 <?php if ( $this->get_footer() ) : ?>
-	<div id="footer">
-		<!-- hook available: wpo_wcpdf_before_footer -->
-		<?php $this->footer(); ?>
-		<!-- hook available: wpo_wcpdf_after_footer -->
-	</div><!-- #letter-footer -->
+	<htmlpagefooter name="docFooter"><!-- required for mPDF engine -->
+		<div id="footer">
+			<!-- hook available: wpo_wcpdf_before_footer -->
+			<?php $this->footer(); ?>
+			<!-- hook available: wpo_wcpdf_after_footer -->
+		</div>
+	</htmlpagefooter><!-- required for mPDF engine -->
 <?php endif; ?>
 
 <?php do_action( 'wpo_wcpdf_after_document', $this->get_type(), $this->order ); ?>

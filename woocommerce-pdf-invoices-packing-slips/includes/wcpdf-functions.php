@@ -73,8 +73,9 @@ function wcpdf_get_document( $document_type, $order, $init = false ) {
 		// if we only have one order, it's simple.
 		if ( count( $order_ids ) == 1 ) {
 			$order_id = array_pop( $order_ids );
+			$order    = wc_get_order( $order_id );
+			
 			do_action( 'wpo_wcpdf_process_template_order', $document_type, $order_id );
-			$order = wc_get_order( $order_id );
 
 			$document = WPO_WCPDF()->documents->get_document( $document_type, $order );
 
@@ -214,6 +215,65 @@ function wcpdf_ubl_headers( $filename, $size ) {
 }
 
 /**
+ * Get the document file
+ * 
+ * @param  object $document
+ * @param  string $output_format
+ * @param  string $error_handling
+ * @return string
+ */
+function wcpdf_get_document_file( object $document, string $output_format = 'pdf', $error_handling = 'exception' ): string {
+	$default_output_format = 'pdf';
+	
+	if ( ! $document ) {
+		$error_message = 'No document object provided.';
+		return wcpdf_error_handling( $error_message, $error_handling, true, 'critical' );
+	}
+	
+	if ( empty( $output_format ) ) {
+		$output_format = $default_output_format;
+	}
+	
+	if ( ! in_array( $output_format, $document->output_formats ) ) {
+		$error_message = "Invalid output format: {$output_format}. Expected one of: " . implode( ', ', $document->output_formats );
+		return wcpdf_error_handling( $error_message, $error_handling, true, 'critical' );
+	}
+	
+	$tmp_path = WPO_WCPDF()->main->get_tmp_path( 'attachments' );
+	
+	if ( ! @is_dir( $tmp_path ) || ! wp_is_writable( $tmp_path ) ) {
+		$error_message = "Couldn't get the attachments temporary folder path: {$tmp_path}.";
+		return wcpdf_error_handling( $error_message, $error_handling, true, 'critical' );
+	}
+	
+	$function = "get_document_{$output_format}_attachment";
+	
+	if ( ! is_callable( array( WPO_WCPDF()->main, $function ) ) ) {
+		$error_message = "The {$function} method is not callable on WPO_WCPDF()->main.";
+		return wcpdf_error_handling( $error_message, $error_handling, true, 'critical' );
+	}
+	
+	$file_path = WPO_WCPDF()->main->$function( $document, $tmp_path );
+	
+	return apply_filters( 'wpo_wcpdf_get_document_file', $file_path, $document, $output_format );
+}
+
+/**
+ * Get the document output format extension
+ *
+ * @param  string $output_format
+ * @return string
+ */
+function wcpdf_get_document_output_format_extension( string $output_format ): string {
+	$output_formats = array(
+		'pdf' => '.pdf',
+		'ubl' => '.xml',
+	);
+	
+	return isset( $output_formats[ $output_format ] ) ? $output_formats[ $output_format ] : $output_formats['pdf'];
+}
+
+/**
  * Wrapper for deprecated functions so we can apply some extra logic.
  *
  * @since  2.0
@@ -294,6 +354,33 @@ function wcpdf_output_error( $message, $level = 'error', $e = null ) {
 		<?php endif ?>
 	</div>
 	<?php
+}
+
+/**
+ * Error handling function
+ *
+ * @param string $message
+ * @param string $handling_type
+ * @param bool   $log_error
+ * @param string $log_level
+ * @return mixed
+ * @throws Exception
+ */
+function wcpdf_error_handling( string $message, string $handling_type = 'exception', bool $log_error = true, string $log_level = 'error' ) {
+	if ( $log_error ) {
+		wcpdf_log_error( $message, $log_level );
+	}
+	
+	switch ( $handling_type ) {
+		case 'exception':
+			throw new \Exception( $message );
+			break;
+		case 'output':
+			wcpdf_output_error( $message, $log_level );
+			break;
+	}
+	
+	return false;
 }
 
 /**
@@ -421,3 +508,30 @@ function wcpdf_safe_redirect_or_die( $url = '', $message = '' ) {
 function WPO_WCPDF_Legacy() {
 	return \WPO\WC\PDF_Invoices\Legacy\WPO_WCPDF_Legacy::instance();
 }
+
+/**
+ * Parse document date for WP_Query.
+ * 
+ * @param array $wp_query_args
+ * @param mixed $query_args
+ *
+ * @return array
+ */
+function wpo_wcpdf_parse_document_date_for_wp_query( array $wp_query_args, mixed $query_vars ): array {
+	$documents = WPO_WCPDF()->documents->get_documents();
+	
+	if ( ! empty( $documents ) ) {
+		foreach ( $documents as $document ) {
+			if ( ! empty( $query_vars[ "wcpdf_{$document->slug}_date" ] ) ) {
+				$wp_query_args = ( new \WC_Order_Data_Store_CPT() )->parse_date_for_wp_query( $query_vars[ "wcpdf_{$document->slug}_date" ], "_wcpdf_{$document->slug}_date", $wp_query_args );
+				
+				if ( isset( $wp_query_args[ "wcpdf_{$document->slug}_date" ] ) ) {
+					unset( $wp_query_args[ "wcpdf_{$document->slug}_date" ] );
+				}
+			}
+		}
+	}
+
+	return $wp_query_args;
+}
+

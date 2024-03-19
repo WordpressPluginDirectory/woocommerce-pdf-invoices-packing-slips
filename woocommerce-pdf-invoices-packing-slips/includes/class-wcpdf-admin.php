@@ -41,14 +41,11 @@ class Admin {
 
 		add_filter( 'request', array( $this, 'request_query_sort_by_column' ) );
 
-		if ( defined( 'WC_VERSION' ) && version_compare( WC_VERSION, '3.3', '>=' ) ) {
-			add_filter( 'bulk_actions-edit-shop_order', array( $this, 'bulk_actions' ), 20 );
-			add_filter( 'bulk_actions-woocommerce_page_wc-orders', array( $this, 'bulk_actions' ), 20 ); // WC 7.1+
-		} else {
-			add_action( 'admin_footer', array( $this, 'bulk_actions_js' ) );
-		}
+		add_filter( 'bulk_actions-edit-shop_order', array( $this, 'bulk_actions' ), 20 );
+		add_filter( 'bulk_actions-woocommerce_page_wc-orders', array( $this, 'bulk_actions' ), 20 ); // WC 7.1+
 		
 		if ( $this->invoice_number_search_enabled() ) { // prevents slowing down the orders list search
+			add_filter( 'woocommerce_order_table_search_query_meta_keys', array( $this, 'search_fields' ) ); // HPOS specific filter
 			add_filter( 'woocommerce_shop_order_search_fields', array( $this, 'search_fields' ) );
 		}
 
@@ -89,9 +86,9 @@ class Admin {
 		if ( get_option( 'wpo_wcpdf_review_notice_dismissed' ) !== false ) {
 			return;
 		} else {
-			if ( isset( $_REQUEST['wpo_wcpdf_dismiss_review'] ) && isset( $_REQUEST['_wpnonce'] ) ) {
+			if ( isset( $_REQUEST['wpo_wcpdf_dismiss_review'] ) && isset( $_REQUEST['_wpdismissnonce'] ) ) {
 				// validate nonce
-				if ( ! wp_verify_nonce( $_REQUEST['_wpnonce'], 'dismiss_review_nonce' ) ) {
+				if ( ! wp_verify_nonce( $_REQUEST['_wpdismissnonce'], 'dismiss_review_nonce' ) ) {
 					wcpdf_log_error( 'You do not have sufficient permissions to perform this action: wpo_wcpdf_dismiss_review' );
 					return;
 				} else {
@@ -105,13 +102,13 @@ class Admin {
 			if ( $invoice_count > 100 ) {
 				// keep track of how many days this notice is show so we can remove it after 7 days
 				$notice_shown_on = get_option( 'wpo_wcpdf_review_notice_shown', array() );
-				$today = date('Y-m-d');
-				if ( !in_array($today, $notice_shown_on) ) {
+				$today           = date('Y-m-d');
+				if ( ! in_array( $today, $notice_shown_on ) ) {
 					$notice_shown_on[] = $today;
 					update_option( 'wpo_wcpdf_review_notice_shown', $notice_shown_on );
 				}
 				// count number of days review is shown, dismiss forever if shown more than 7
-				if (count($notice_shown_on) > 7) {
+				if ( count( $notice_shown_on ) > 7 ) {
 					update_option( 'wpo_wcpdf_review_notice_dismissed', true );
 					return;
 				}
@@ -124,7 +121,7 @@ class Admin {
 					<p><?php esc_html_e( 'It would mean a lot to us if you would quickly give our plugin a 5-star rating. Help us spread the word and boost our motivation!', 'woocommerce-pdf-invoices-packing-slips' ); ?></p>
 					<ul>
 						<li><a href="https://wordpress.org/support/plugin/woocommerce-pdf-invoices-packing-slips/reviews/?rate=5#new-post" class="button"><?php esc_html_e( 'Yes you deserve it!', 'woocommerce-pdf-invoices-packing-slips' ); ?></span></a></li>
-						<li><a href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'wpo_wcpdf_dismiss_review', true ), 'dismiss_review_nonce' ) ); ?>" class="wpo-wcpdf-dismiss"><?php esc_html_e( 'Hide this message', 'woocommerce-pdf-invoices-packing-slips' ); ?> / <?php esc_html_e( 'Already did!', 'woocommerce-pdf-invoices-packing-slips' ); ?></a></li>
+						<li><a href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'wpo_wcpdf_dismiss_review', true ), 'dismiss_review_nonce', '_wpdismissnonce' ) ); ?>" class="wpo-wcpdf-dismiss"><?php esc_html_e( 'Hide this message', 'woocommerce-pdf-invoices-packing-slips' ); ?> / <?php esc_html_e( 'Already did!', 'woocommerce-pdf-invoices-packing-slips' ); ?></a></li>
 						<li><a href="mailto:support@wpovernight.com?Subject=Here%20is%20how%20I%20think%20you%20can%20do%20better"><?php esc_html_e( 'Actually, I have a complaint...', 'woocommerce-pdf-invoices-packing-slips' ); ?></a></li>
 					</ul>
 				</div>
@@ -152,9 +149,9 @@ class Admin {
 		if ( get_option( 'wpo_wcpdf_install_notice_dismissed' ) !== false ) {
 			return;
 		} else {
-			if ( isset( $_REQUEST['wpo_wcpdf_dismiss_install'] ) && isset( $_REQUEST['_wpnonce'] ) ) {
+			if ( isset( $_REQUEST['wpo_wcpdf_dismiss_install'] ) && isset( $_REQUEST['_wpdismissnonce'] ) ) {
 				// validate nonce
-				if ( ! wp_verify_nonce( $_REQUEST['_wpnonce'], 'dismiss_install_nonce' ) ) {
+				if ( ! wp_verify_nonce( $_REQUEST['_wpdismissnonce'], 'dismiss_install_nonce' ) ) {
 					wcpdf_log_error( 'You do not have sufficient permissions to perform this action: wpo_wcpdf_dismiss_install' );
 					return;
 				} else {
@@ -167,7 +164,7 @@ class Admin {
 				?>
 				<div class="notice notice-info is-dismissible wpo-wcpdf-install-notice">
 					<p><strong><?php esc_html_e( 'New to PDF Invoices & Packing Slips for WooCommerce?', 'woocommerce-pdf-invoices-packing-slips' ); ?></strong> &#8211; <?php esc_html_e( 'Jumpstart the plugin by following our wizard!', 'woocommerce-pdf-invoices-packing-slips' ); ?></p>
-					<p class="submit"><a href="<?php echo esc_url( admin_url( 'admin.php?page=wpo-wcpdf-setup' ) ); ?>" class="button-primary"><?php esc_html_e( 'Run the Setup Wizard', 'woocommerce-pdf-invoices-packing-slips' ); ?></a> <a href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'wpo_wcpdf_dismiss_install', true ), 'dismiss_install_nonce' ) ); ?>" class="wpo-wcpdf-dismiss-wizard"><?php esc_html_e( 'I am the wizard', 'woocommerce-pdf-invoices-packing-slips' ); ?></a></p>
+					<p class="submit"><a href="<?php echo esc_url( admin_url( 'admin.php?page=wpo-wcpdf-setup' ) ); ?>" class="button-primary"><?php esc_html_e( 'Run the Setup Wizard', 'woocommerce-pdf-invoices-packing-slips' ); ?></a> <a href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'wpo_wcpdf_dismiss_install', true ), 'dismiss_install_nonce', '_wpdismissnonce' ) ); ?>" class="wpo-wcpdf-dismiss-wizard"><?php esc_html_e( 'I am the wizard', 'woocommerce-pdf-invoices-packing-slips' ); ?></a></p>
 				</div>
 				<script type="text/javascript">
 				jQuery( function( $ ) {
@@ -470,16 +467,14 @@ class Admin {
 		}
 
 		// resend order emails
-		if ( defined( 'WC_VERSION' ) && version_compare( WC_VERSION, '3.2', '>=' ) ) {
-			add_meta_box(
-				'wpo_wcpdf_send_emails',
-				__( 'Send order email', 'woocommerce-pdf-invoices-packing-slips' ),
-				array( $this, 'send_order_email_meta_box' ),
-				$screen_id,
-				'side',
-				'high'
-			);
-		}
+		add_meta_box(
+			'wpo_wcpdf_send_emails',
+			__( 'Send order email', 'woocommerce-pdf-invoices-packing-slips' ),
+			array( $this, 'send_order_email_meta_box' ),
+			$screen_id,
+			'side',
+			'high'
+		);
 
 		// create PDF buttons
 		add_meta_box(
@@ -959,23 +954,6 @@ class Admin {
 	}
 
 	/**
-	 * Add actions to menu, legacy method
-	 */
-	public function bulk_actions_js() {
-		if ( $this->is_order_page() ) {
-			?>
-			<script type="text/javascript">
-			jQuery(document).ready(function() {
-				<?php foreach (wcpdf_get_bulk_actions() as $action => $title) { ?>
-				jQuery('<option>').val('<?php echo esc_attr( $action ); ?>').html('<?php echo esc_attr( $title ); ?>').appendTo("select[name='action'], select[name='action2']");
-				<?php }	?>
-			});
-			</script>
-			<?php
-		}
-	}
-
-	/**
 	 * Save invoice number date
 	 */
 	public function save_invoice_number_date( $order_id, $order ) {
@@ -1012,8 +990,8 @@ class Admin {
 				$invoice->set_data( $document_data, $order );
 
 				// check if we have number, and if not generate one
-				if  ( $invoice->get_date() && ! $invoice->get_number() && is_callable( array( $invoice, 'init_number' ) ) ) {
-					$invoice->init_number();
+				if  ( $invoice->get_date() && ! $invoice->get_number() && is_callable( array( $invoice, 'initiate_number' ) ) ) {
+					$invoice->initiate_number();
 				}
 
 				$invoice->save();
@@ -1210,8 +1188,8 @@ class Admin {
 					$document->set_data( $document_data, $order );
 
 					// check if we have number, and if not generate one
-					if( $document->get_date() && ! $document->get_number() && is_callable( array( $document, 'init_number' ) ) ) {
-						$document->init_number();
+					if( $document->get_date() && ! $document->get_number() && is_callable( array( $document, 'initiate_number' ) ) ) {
+						$document->initiate_number();
 					}
 
 					$document->save();
@@ -1400,7 +1378,7 @@ class Admin {
 	}
 
 	public function sort_orders_by_numeric_invoice_number( $query ): void {
-		if ( ! is_admin() || ! $query->is_main_query() || 'shop_order' !== $query->get( 'post_type' ) && '_wcpdf_invoice_number' !== $query->get( 'meta_key' ) ) {
+		if ( ! is_admin() || ! $query->is_main_query() || 'shop_order' !== $query->get( 'post_type' ) || '_wcpdf_invoice_number' !== $query->get( 'meta_key' ) ) {
 			return;
 		}
 

@@ -16,34 +16,55 @@ if ( ! class_exists( '\\WPO\\WC\\PDF_Invoices\\Documents\\Bulk_Document' ) ) :
 class Bulk_Document {
 	
 	/**
+	 * Document slug
+	 * 
+	 * @var string
+	 */
+	public $slug;
+	
+	/**
 	 * Document type.
-	 * @var String
+	 * 
+	 * @var string
 	 */
 	public $type;
 
 	/**
 	 * Wrapper document - used for filename etc.
-	 * @var String
+	 * 
+	 * @var string
 	 */
 	public $wrapper_document;
 
 	/**
 	 * Order IDs.
+	 * 
 	 * @var array
 	 */
 	public $order_ids;
 	
+	/**
+	 * Is bulk document
+	 * 
+	 * @var bool
+	 */
 	public $is_bulk;
 	
+	/**
+	 * Document output formats
+	 * 
+	 * @var array
+	 */
 	public $output_formats;
 
 	public function __construct( $document_type, $order_ids = array() ) {
+		$this->slug      = 'bulk';
 		$this->type      = $document_type;
 		$this->order_ids = $order_ids;
 		$this->is_bulk   = true;
 		
 		// output formats (placed after parent construct to override the abstract default)
-		$this->output_formats = apply_filters( "wpo_wcpdf_{$this->type}_output_formats", array( 'pdf' ), $this );
+		$this->output_formats = apply_filters( "wpo_wcpdf_{$this->slug}_output_formats", array( 'pdf' ), $this );
 	}
 	
 	public function exists() {

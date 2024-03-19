@@ -20,15 +20,15 @@ class Packing_Slip extends Order_Document_Methods {
 	 */
 	public function __construct( $order = 0 ) {
 		// set properties
-		$this->type		= 'packing-slip';
-		$this->title	= __( 'Packing Slip', 'woocommerce-pdf-invoices-packing-slips' );
-		$this->icon		= WPO_WCPDF()->plugin_url() . "/assets/images/packing-slip.svg";
+		$this->type  = 'packing-slip';
+		$this->title = __( 'Packing Slip', 'woocommerce-pdf-invoices-packing-slips' );
+		$this->icon  = WPO_WCPDF()->plugin_url() . "/assets/images/packing-slip.svg";
 		
 		// call parent constructor
 		parent::__construct( $order );
 		
 		// output formats (placed after parent construct to override the abstract default)
-		$this->output_formats = apply_filters( "wpo_wcpdf_{$this->type}_output_formats", array( 'pdf' ), $this );
+		$this->output_formats = apply_filters( "wpo_wcpdf_{$this->slug}_output_formats", array( 'pdf' ), $this );
 	}
 
 	public function get_title() {
@@ -53,12 +53,12 @@ class Packing_Slip extends Order_Document_Methods {
 				}
 			}
 		} else {
-			$suffix = date( 'Y-m-d' ); // 2020-11-11
+			$suffix = date_i18n( 'Y-m-d' ); // 2024-12-31
 		}
 		
 		// get filename
 		$output_format = ! empty( $args['output'] ) ? esc_attr( $args['output'] ) : 'pdf';
-		$filename      = $name . '-' . $suffix . $this->get_output_format_extension( $output_format );
+		$filename      = $name . '-' . $suffix . wcpdf_get_document_output_format_extension( $output_format );
 
 		// Filter filename
 		$order_ids = isset( $args['order_ids'] ) ? $args['order_ids'] : array( $this->order_id );

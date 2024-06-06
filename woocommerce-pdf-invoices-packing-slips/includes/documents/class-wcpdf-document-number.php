@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( ! class_exists( '\\WPO\\WC\\PDF_Invoices\\Documents\\Document_Number' ) ) :
 
 class Document_Number {
-	
+
 	/**
 	 * The raw, unformatted number
 	 * @var int
@@ -129,14 +129,26 @@ class Document_Number {
 		$document_year	= $document_date->date_i18n( 'Y' );
 		$document_month	= $document_date->date_i18n( 'm' );
 		$document_day	= $document_date->date_i18n( 'd' );
-		$order_number	= is_callable( array( $order, 'get_order_number' ) ) ? $order->get_order_number() : '';
+
+		// get order number
+		if ( is_callable( array( $order, 'get_order_number' ) ) ) { // order
+			$order_number = $order->get_order_number();
+		} elseif ( $document->is_refund( $order ) ) { // refund order
+			$parent_order = $document->get_refund_parent( $order );
+
+			if ( ! empty( $parent_order ) && is_callable( array( $parent_order, 'get_order_number' ) ) ) {
+				$order_number = $parent_order->get_order_number();
+			}
+		} else {
+			$order_number = '';
+		}
 
 		// make replacements
 		foreach ( $formats as $key => $value ) {
 			if ( empty( $value ) ) {
 				continue;
 			}
-			
+
 			$value = str_replace( '[order_year]', $order_year, $value );
 			$value = str_replace( '[order_month]', $order_month, $value );
 			$value = str_replace( '[order_day]', $order_day, $value );
@@ -150,7 +162,7 @@ class Document_Number {
 			foreach ( $date_types as $date_type ) {
 				if ( false !== strpos( $value, "[{$date_type}_date=" ) ) {
 					preg_match_all( "/\[{$date_type}_date=\"(.*?)\"\]/", $value, $document_date_tags );
-					
+
 					if ( ! empty( $document_date_tags[1] ) ) {
 						foreach ( $document_date_tags[1] as $match_id => $date_format ) {
 							if ( 'order' === $date_type ) {
@@ -180,7 +192,7 @@ class Document_Number {
 		}
 
 		// Add prefix & suffix
-		$this->formatted_number = $formats['prefix'] . $number . $formats['suffix'] ;
+		$this->formatted_number = $formats['prefix'] . $number . $formats['suffix'];
 		// Apply filters and store
 		$this->formatted_number = apply_filters( 'wpo_wcpdf_format_document_number', $this->formatted_number, $this, $document, $order );
 

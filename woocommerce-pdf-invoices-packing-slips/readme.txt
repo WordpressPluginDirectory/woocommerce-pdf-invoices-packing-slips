@@ -5,7 +5,7 @@ Tags: woocommerce, pdf, ubl, invoices, packing slips
 Requires at least: 4.4
 Tested up to: 6.5
 Requires PHP: 7.2
-Stable tag: 3.8.1
+Stable tag: 3.8.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -102,6 +102,28 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 
 == Changelog ==
 
+= 3.8.3 (2024-06-06) =
+* New: adds language attribute to PDF HTML
+* New: Dompdf `v3.0.0` upgrade
+* New: filter hook `wpo_wcpdf_after_system_status_table`
+* New: filter for server configs `wpo_wcpdf_advanced_status_server_configs`
+* New: PDFJS `v3.11.174` upgrade
+* Tweak: adds `p` as allowed tag of the `wpo_wcpdf_sanitize_html_content()` function
+* Fix: number formatting `[order_number]` placeholder not using parent order number on Credit Notes
+* Fix: remove unwanted tags from `wpo_wcpdf_sanitize_html_content()`
+* Fix: removes unused "Log invoice number generation" setting
+* Fix: reverts the `customer_invoice` email title to the original Woo title
+* Fix: the function `get_extensions_license_data()` returning empty if no cached data found
+* Fix: bug created by the output of the function `wpo_wcpdf_sanitize_html_content()` being `null`
+* Translations: Updated translation template (POT)
+* Tested up to WooCommerce 9.0
+
+= 3.8.2 (2024-04-29) =
+* Fix: "Customer Invoice" email title under "Send order email" metabox
+* Fix: filter called with a refund object in `get_billing_address()` and `get_shipping_address()`
+* Translations: Updated translation template (POT)
+* Tested up to WooCommerce 8.9
+
 = 3.8.1 (2024-04-23) =
 * New: updates DOMPDF to `v2.0.7`
 * New: adds `woocommerce` as required plugin
@@ -194,7 +216,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 * New: advanced tab with Number tools extension code integrated
 * Tweak: updates Upgrade tab extension features
 * Fix: bug on historical settings not being deleted when using most current settings
-* Fix: bug on document variable name on `output_ubl()` method 
+* Fix: bug on document variable name on `output_ubl()` method
 * Tested up to WooCommerce 8.3
 
 = 3.7.1 (2023-10-20) =
@@ -243,7 +265,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 * New: implemented autoloader for plugin classes
 * New: adds a new Status tool to reset plugin settings
 * New: invoice number column added to the WooCommerce order analytics
-* Fix: replaces `utf8_decode()` which is deprecated in PHP 8.2 
+* Fix: replaces `utf8_decode()` which is deprecated in PHP 8.2
 * Fix: allows the translation for the Shipping Notes strings
 * Fix: bug when trying to delete temporary files when using mPDF extension
 * Fix: bug on `$updater` returning `null` in Upgrade tab function
@@ -255,7 +277,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 * Tested up to WooCommerce 8.0 & WordPress 6.3
 
 = 3.5.6 (2023-06-21) =
-* New: adds a generic shortcode `[wcpdf_download_pdf]` for PDF download links 
+* New: adds a generic shortcode `[wcpdf_download_pdf]` for PDF download links
 * New: bump preview PDFJS library to v3.7.107
 * Tweak: optimize PDFJS library size
 * Tweak: remove WPO hiring banner from the Status tab
@@ -348,7 +370,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 = 3.2.4 (2022-11-07) =
 * Tweak: update translation template and files
 * Fix: break long URLs in different lines if it reaches the available space in Simple template
-* Fix: restore deleted strings and load them using standalone strings.php file 
+* Fix: restore deleted strings and load them using standalone strings.php file
 * Fix: warning on deprecated argument from product get_dimensions() method
 * Tested up to WooCommerce 7.1
 
@@ -573,7 +595,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 = 2.8.3 =
 * New: Allow filtering action button classes
 * Fix: Error when no order data passed to filename function
-* Fix: During first install, only set defaults if not already (pre-) configured 
+* Fix: During first install, only set defaults if not already (pre-) configured
 * Fix: Use `WC()->template_path()` instead of `WC_TEMPLATE_PATH` for theme template overrides
 * Fix: Checks existence of document data number and date for order metabox fields
 * Fix: Prevent WooCommerce deprecation notices for non-product item types
@@ -592,7 +614,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 = 2.8.0 =
 * Fix: Support for PHP8.0, deprecating support for PHP7.0 or older (separate addon available for backwards compatibility)
 * Fix: Setup wizard crash when 3rd party plugins/themes check screen object
-* Dev: Use internal date formatting function, allowing easier PDF specific date format overrides 
+* Dev: Use internal date formatting function, allowing easier PDF specific date format overrides
 * Dev: Introduced new action hook `wpo_wcpdf_document_created_manually`
 * Marked tested up to WooCommerce 5.0
 
@@ -708,7 +730,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 
 = 2.4.3 =
 * Fix: Prevent errors unsetting a non-existing setting
-* Fix: Potential crash on improperly initiated documents 
+* Fix: Potential crash on improperly initiated documents
 * Fix: Reversed tax rate calculation arguments
 * Fix: Support tax rate functions for non-line items
 * Fix: comma position on multiple tax rates
@@ -748,7 +770,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 = 2.3.3 =
 * Tweak: Move filter to override order object to document level (rather than per email)
 
-= 2.3.2 = 
+= 2.3.2 =
 * Fix: Load enhanced selection styles on settings page
 * Fix: WC Bookings email attachment
 * Tweak: Use WooCommerce 3.7 tax rate data when available.
@@ -782,7 +804,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 * Tested up to WC3.6
 * Fix: Prevent infinite loop on temporary folder creation for partially migrated sites or write permission issues
 * Tweak: Removed height & width attributes from logo image (+filter `wpo_wcpdf_header_logo_img_element`)
-* Dev: Enable guest access to PDF with order key in URL 
+* Dev: Enable guest access to PDF with order key in URL
 
 = 2.2.11 =
 * Fix: Fatal error on orders with multiple refunds
@@ -856,7 +878,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 * Translations: Updated translations POT
 
 = 2.1.10 =
-* Feature: Include invoice number and date in WooCommerce data remover and exporter 
+* Feature: Include invoice number and date in WooCommerce data remover and exporter
 * Fix: Row class for Chained Products compatibility
 * Fix: Improved compatibility with Advanced Custom Fields
 * Fix: Setting for disabling for free invoices should be applied even when other plugins are applying rules
@@ -891,7 +913,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 
 = 2.1.4 =
 * Fix: WooCommerce 3.3 action buttons
-* Feature: Added row classes for WooCommerce Composite Products 
+* Feature: Added row classes for WooCommerce Composite Products
 
 = 2.1.3 =
 * Fix: Fatal PHP error on My Account page.
@@ -949,7 +971,7 @@ There's a setting on the Advanced tab of the settings page that allows you to to
 = 2.0.8 =
 * Feature: Add support for Bedrock / alternative folder structures
 * Dev: Filter for merged documents
-* Fix: Better attributes fallback for product variations 
+* Fix: Better attributes fallback for product variations
 
 = 2.0.7 =
 * Feature: Added button to delete legacy settings

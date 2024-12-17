@@ -181,7 +181,7 @@ class SettingsGeneral {
 					'option_name'  => $option_name,
 					'id'           => 'vat_number',
 					'translatable' => true,
-					'description'  => __( 'Required for UBL output format.<br>You can display this number on the invoice from the document settings.', 'woocommerce-pdf-invoices-packing-slips' ) . ' ' . $requires_pro        ,
+					'description'  => __( 'Required for UBL output format.<br>You can display this number on the invoice from the document settings.', 'woocommerce-pdf-invoices-packing-slips' ) . ' ' . $requires_pro,
 				)
 			),
 			array(
@@ -194,7 +194,20 @@ class SettingsGeneral {
 					'option_name'  => $option_name,
 					'id'           => 'coc_number',
 					'translatable' => true,
-					'description'  => __( 'Required for UBL output format.<br>You can display this number on the invoice from the document settings.', 'woocommerce-pdf-invoices-packing-slips' ) . ' ' . $requires_pro        ,
+					'description'  => __( 'Required for UBL output format.<br>You can display this number on the invoice from the document settings.', 'woocommerce-pdf-invoices-packing-slips' ) . ' ' . $requires_pro,
+				)
+			),
+			array(
+				'type'     => 'setting',
+				'id'       => 'shop_phone_number',
+				'title'    => __( 'Shop Phone Number', 'woocommerce-pdf-invoices-packing-slips' ),
+				'callback' => 'text_input',
+				'section'  => 'general_settings',
+				'args'     => array(
+					'option_name'  => $option_name,
+					'id'           => 'shop_phone_number',
+					'translatable' => true,
+					'description'  => __( 'Mandatory for certain UBL formats.', 'woocommerce-pdf-invoices-packing-slips' ),
 				)
 			),
 			array(
@@ -320,18 +333,28 @@ class SettingsGeneral {
 		$template_list = array();
 		foreach ( $installed_templates as $path => $template_id ) {
 			$template_name = basename( $template_id );
-			$group = dirname( $template_id );
+			$group         = dirname( $template_id );
+
+			// check if this is an extension template
+			if ( false !== strpos( $group, 'extension::' ) ) {
+				$extension = explode( '::', $group );
+				$group     = 'extension';
+			}
+
 			switch ( $group ) {
 				case 'default':
 				case 'premium_plugin':
 					// no suffix
+					break;
+				case 'extension':
+					$template_name = sprintf( '%s (%s) [%s]', $template_name, __( 'Extension', 'woocommerce-pdf-invoices-packing-slips' ), $extension[1] );
 					break;
 				case 'theme':
 				default:
 					$template_name = sprintf( '%s (%s)', $template_name, __( 'Custom', 'woocommerce-pdf-invoices-packing-slips' ) );
 					break;
 			}
-			$template_list[$template_id] = $template_name;
+			$template_list[ $template_id ] = $template_name;
 		}
 		return $template_list;
 	}

@@ -60,7 +60,7 @@
 		<!-- clear_released_semaphore_locks -->
 		<div class="tool">
 			<h4><?php _e( 'Remove released semaphore locks', 'woocommerce-pdf-invoices-packing-slips' ); ?></h4>
-			<p><?php _e( 'Clean up the released semaphore locks from the database.', 'woocommerce-pdf-invoices-packing-slips' ); ?></p>
+			<p><?php _e( 'Clean up the released semaphore locks from the database. These locks prevent simultaneous document generation requests, ensuring correct document numbering. Once released, they are safe to remove.', 'woocommerce-pdf-invoices-packing-slips' ); ?></p>
 			<form method="post" id="clear_released_semaphore_locks">
 				<input type="hidden" name="debug_tool" value="clear_released_semaphore_locks">
 				<input type="submit" class="button button-secondary submit" value="<?php _e( 'Remove released locks', 'woocommerce-pdf-invoices-packing-slips' ); ?>">
@@ -68,7 +68,7 @@
 					<div class="notice inline" style="display:none;"><p></p></div>
 				</fieldset>
 			</form>
-			<?php $released_semaphore_locks = \WPO\WC\PDF_Invoices\Updraft_Semaphore_3_0::count_released_locks(); ?>
+			<?php $released_semaphore_locks = \WPO\IPS\Semaphore::count_released_locks(); ?>
 			<?php if ( $released_semaphore_locks > 0 ) : ?>
 				<div class="notice notice-warning inline">
 					<p>
@@ -91,7 +91,7 @@
 					<p><?php _e( 'There are no released semaphore locks in the database.', 'woocommerce-pdf-invoices-packing-slips' ); ?></p>
 				</div>
 			<?php endif; ?>
-			<?php $cleanup_action = \WPO\WC\PDF_Invoices\Updraft_Semaphore_3_0::get_cleanup_action();  ?>
+			<?php $cleanup_action = \WPO\IPS\Semaphore::get_cleanup_action();  ?>
 			<?php if ( $cleanup_action ) : ?>
 				<div class="notice notice-info inline">
 					<p>
@@ -113,7 +113,7 @@
 		<!-- /clear_released_semaphore_locks -->
 		<!-- clear_released_legacy_semaphore_locks -->
 		<?php
-			$released_legacy_semaphore_locks = \WPO\WC\PDF_Invoices\Updraft_Semaphore_3_0::count_released_locks( true );
+			$released_legacy_semaphore_locks = \WPO\IPS\Semaphore::count_released_locks( true );
 			if ( $released_legacy_semaphore_locks > 0 ) :
 		?>
 		<div class="tool">

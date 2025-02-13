@@ -53,7 +53,7 @@ class AddressHandler extends UblHandler {
 				'name'  => 'cac:PartyName',
 				'value' => array(
 					'name'  => 'cbc:Name',
-					'value' => $company,
+					'value' => wpo_ips_ubl_sanitize_string( $company ),
 				),
 			),
 			array(
@@ -61,11 +61,11 @@ class AddressHandler extends UblHandler {
 				'value' => array(
 					array(
 						'name'  => 'cbc:StreetName',
-						'value' => get_option( 'woocommerce_store_address' ),
+						'value' => wpo_ips_ubl_sanitize_string( get_option( 'woocommerce_store_address' ) ),
 					),
 					array(
 						'name'  => 'cbc:CityName',
-						'value' => get_option( 'woocommerce_store_city' ),
+						'value' => wpo_ips_ubl_sanitize_string( get_option( 'woocommerce_store_city' ) ),
 					),
 					array(
 						'name'  => 'cbc:PostalZone',
@@ -75,14 +75,14 @@ class AddressHandler extends UblHandler {
 						'name'  => 'cac:AddressLine',
 						'value' => array(
 							'name'  => 'cbc:Line',
-							'value' => $address,
+							'value' => wpo_ips_ubl_sanitize_string( $address ),
 						),
 					),
 					array(
 						'name'  => 'cac:Country',
 						'value' => array(
 							'name'       => 'cbc:IdentificationCode',
-							'value'      => get_option( 'woocommerce_default_country' ),
+							'value'      => wc_format_country_state_string( get_option( 'woocommerce_default_country', '' ) )['country'],
 							'attributes' => array(
 								'listID'       => 'ISO3166-1:Alpha2',
 								'listAgencyID' => '6',
@@ -117,14 +117,14 @@ class AddressHandler extends UblHandler {
 				),
 			);
 		}
-		
+
 		if ( ! empty( $company ) && ! empty( $coc_number ) ) {
 			$supplierPartyDetails[] = array(
 				'name'  => 'cac:PartyLegalEntity',
 				'value' => array(
 					array(
 						'name'  => 'cbc:RegistrationName',
-						'value' => $company,
+						'value' => wpo_ips_ubl_sanitize_string( $company ),
 					),
 					array(
 						'name'       => 'cbc:CompanyID',
@@ -146,36 +146,12 @@ class AddressHandler extends UblHandler {
 				),
 			),
 		);
-		
+
 		return $supplierPartyDetails;
 	}
 
 	public function return_customer_party( $data, $options = array() ) {
-		$vat_number = apply_filters( 'wpo_wc_ubl_vat_number', '', $this->document->order );
-
-		if ( empty( $vat_number ) ) {
-			// Try fetching VAT Number from meta
-			$vat_meta_keys = array(
-				'_vat_number',              // WooCommerce EU VAT Number
-				'VAT Number',               // WooCommerce EU VAT Compliance
-				'vat_number',               // Aelia EU VAT Assistant
-				'_billing_vat_number',      // WooCommerce EU VAT Number 2.3.21+
-				'_billing_eu_vat_number',   // EU VAT Number for WooCommerce (WP Whale/former Algoritmika)
-				'yweu_billing_vat',         // YITH WooCommerce EU VAT
-				'billing_vat',              // German Market
-				'_billing_vat_id',          // Germanized Pro
-				'_shipping_vat_id'          // Germanized Pro (alternative)
-			);
-
-			foreach ( $vat_meta_keys as $meta_key ) {
-				$vat_number = $this->document->order->get_meta( $meta_key );
-
-				if ( $vat_number ) {
-					break;
-				}
-			}
-		}
-
+		$vat_number        = apply_filters( 'wpo_wc_ubl_vat_number', wpo_wcpdf_get_order_customer_vat_number( $this->document->order ), $this->document->order );
 		$customerPartyName = $customerPartyContactName = $this->document->order->get_formatted_billing_full_name();
 		$billing_company   = $this->document->order->get_billing_company();
 
@@ -200,7 +176,7 @@ class AddressHandler extends UblHandler {
 							'name'  => 'cac:PartyName',
 							'value' => array(
 								'name'  => 'cbc:Name',
-								'value' => $customerPartyName,
+								'value' => wpo_ips_ubl_sanitize_string( $customerPartyName ),
 							),
 						),
 						array(
@@ -208,11 +184,11 @@ class AddressHandler extends UblHandler {
 							'value' => array(
 								array(
 									'name'  => 'cbc:StreetName',
-									'value' => $this->document->order->get_billing_address_1(),
+									'value' => wpo_ips_ubl_sanitize_string( $this->document->order->get_billing_address_1() ),
 								),
 								array(
 									'name'  => 'cbc:CityName',
-									'value' => $this->document->order->get_billing_city(),
+									'value' => wpo_ips_ubl_sanitize_string( $this->document->order->get_billing_city() ),
 								),
 								array(
 									'name'  => 'cbc:PostalZone',
@@ -222,7 +198,7 @@ class AddressHandler extends UblHandler {
 									'name'  => 'cac:AddressLine',
 									'value' => array(
 										'name'  => 'cbc:Line',
-										'value' => $this->document->order->get_billing_address_1() . '<br/>' . $this->document->order->get_billing_address_2(),
+										'value' => wpo_ips_ubl_sanitize_string( $this->document->order->get_billing_address_1() . ' ' . $this->document->order->get_billing_address_2() ),
 									),
 								),
 								array(
@@ -265,7 +241,7 @@ class AddressHandler extends UblHandler {
 							'value' => array(
 								array(
 									'name'  => 'cbc:Name',
-									'value' => $customerPartyContactName,
+									'value' => wpo_ips_ubl_sanitize_string( $customerPartyContactName ),
 								),
 								array(
 									'name'  => 'cbc:ElectronicMail',

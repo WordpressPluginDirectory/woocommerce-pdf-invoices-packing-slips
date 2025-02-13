@@ -209,6 +209,8 @@ class Invoice extends OrderDocumentMethods {
 	 * PDF settings fields
 	 */
 	public function get_pdf_settings_fields( $option_name ) {
+		$wp_filesystem = wpo_wcpdf_get_wp_filesystem();
+
 		$settings_fields = array(
 			array(
 				'type'			=> 'section',
@@ -238,7 +240,7 @@ class Invoice extends OrderDocumentMethods {
 					'id'			  => 'attach_to_email_ids',
 					'fields_callback' => array( $this, 'get_wc_emails' ),
 					/* translators: directory path */
-					'description'	  => !is_writable( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ) ? '<span class="wpo-warning">' . sprintf( __( 'It looks like the temp folder (<code>%s</code>) is not writable, check the permissions for this folder! Without having write access to this folder, the plugin will not be able to email invoices.', 'woocommerce-pdf-invoices-packing-slips' ), WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ).'</span>':'',
+					'description'	  => ! $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ) ? '<span class="wpo-warning">' . sprintf( __( 'It looks like the temp folder (<code>%s</code>) is not writable, check the permissions for this folder! Without having write access to this folder, the plugin will not be able to email invoices.', 'woocommerce-pdf-invoices-packing-slips' ), WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ).'</span>':'',
 				)
 			),
 			array(
@@ -481,7 +483,7 @@ class Invoice extends OrderDocumentMethods {
 				'args'			=> array(
 					'option_name'	=> $option_name,
 					'id'			=> 'invoice_number_search',
-					'description'   => __( 'The search process may be slower on non-HPOS stores. For a more efficient search, you can utilize the <a href="https://woocommerce.com/document/high-performance-order-storage/" target="_blank">HPOS</a> feature, allowing you to search orders by invoice numbers using the search type selector.', 'woocommerce-pdf-invoices-packing-slips' ),
+					'description'   => __( 'The search process may be slower on non-HPOS stores. For a more efficient search, you can utilize the <a href="https://woocommerce.com/document/high-performance-order-storage/" target="_blank">HPOS</a> feature to search for orders by invoice numbers using the search type selector. Additionally, it allows you to search for multiple orders using a comma-separated list of invoice numbers.', 'woocommerce-pdf-invoices-packing-slips' ),
 				)
 			),
 			array(
@@ -551,6 +553,50 @@ class Invoice extends OrderDocumentMethods {
 			),
 		);
 
+		if ( 'guest' === WPO_WCPDF()->endpoint->get_document_link_access_type() ) {
+			$settings_fields[] = array(
+				'type'     => 'setting',
+				'id'       => 'include_email_link',
+				'title'    => __( 'Include document link in emails', 'woocommerce-pdf-invoices-packing-slips' ),
+				'callback' => 'select',
+				'section'  => $this->type,
+				'args'     => array(
+					'option_name'      => $option_name,
+					'id'               => 'include_email_link',
+					'options_callback' => array( $this, 'get_wc_emails' ),
+					'multiple'         => true,
+					'enhanced_select'  => true,
+					'description'      => sprintf(
+						/* translators: 1. opening anchor tag, 2. closing anchor tag */
+						__( 'Select emails to include the document link. This applies only to emails sent to "Guest" customers when the "Guest" access type is selected. %1$sCheck document link access type%2$s', 'woocommerce-pdf-invoices-packing-slips' ),
+						'<a target="_blank" href="' . esc_url( admin_url( 'admin.php?page=wpo_wcpdf_options_page&tab=debug&section=settings' ) ) . '">',
+						'</a>'
+					)
+				),
+			);
+
+			$settings_fields[] = array(
+				'type'     => 'setting',
+				'id'       => 'include_email_link_placement',
+				'title'    => __( 'Document link position in emails', 'woocommerce-pdf-invoices-packing-slips' ),
+				'callback' => 'select',
+				'section'  => $this->type,
+				'args'     => array(
+					'option_name' => $option_name,
+					'id'          => 'include_email_link_placement',
+					'options'     => apply_filters( 'wpo_wcpdf_document_link_guest_emails_template_hooks_options', array(
+						'order_details'            => 'Order details',
+						'order_meta'               => 'Order meta',
+						'before_order_table'       => 'Before order table',
+						'after_order_table'        => 'After order table',
+						'customer_address_section' => 'Customer address section',
+						'customer_details'         => 'Customer details',
+					), $this ),
+					'description' => __( 'Select the placement of the document link in the guest customer emails.', 'woocommerce-pdf-invoices-packing-slips' ),
+				),
+			);
+		}
+
 		// remove/rename some fields when invoice number is controlled externally
 		if ( apply_filters( 'woocommerce_invoice_number_by_plugin', false ) ) {
 			$remove_settings = array( 'next_invoice_number', 'number_format', 'reset_number_yearly' );
@@ -576,6 +622,8 @@ class Invoice extends OrderDocumentMethods {
 	 * UBL settings fields
 	 */
 	public function get_ubl_settings_fields( $option_name ) {
+		$wp_filesystem = wpo_wcpdf_get_wp_filesystem();
+
 		$settings_fields = array(
 			array(
 				'type'     => 'section',
@@ -606,7 +654,12 @@ class Invoice extends OrderDocumentMethods {
 					'options'     => apply_filters( 'wpo_wcpdf_document_ubl_settings_formats', array(
 						'ubl_2_1' => __( 'UBL 2.1' , 'woocommerce-pdf-invoices-packing-slips' ),
 					), $this ),
-					'description' => $this->get_ubl_format_description(),
+					'description' => ! wpo_ips_ubl_is_country_format_extension_active() ? sprintf(
+						/* translators: %1$s: opening link tag, %2$s: closing link tag */
+						__( 'Install extensions to support country-specific e-invoicing formats. See the latest %1$ssupported formats%2$s.', 'woocommerce-pdf-invoices-packing-slips' ),
+						'<a href="https://github.com/wpovernight/wpo-ips-einvoicing" target="_blank">',
+						'</a>'
+					) : '',
 				)
 			),
 			array(
@@ -620,7 +673,7 @@ class Invoice extends OrderDocumentMethods {
 					'id'              => 'attach_to_email_ids',
 					'fields_callback' => array( $this, 'get_wc_emails' ),
 					/* translators: directory path */
-					'description'     => ! is_writable( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ) ? '<span class="wpo-warning">' . sprintf( __( 'It looks like the temp folder (<code>%s</code>) is not writable, check the permissions for this folder! Without having write access to this folder, the plugin will not be able to email invoices.', 'woocommerce-pdf-invoices-packing-slips' ), WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ).'</span>':'',
+					'description'     => ! $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ) ? '<span class="wpo-warning">' . sprintf( __( 'It looks like the temp folder (<code>%s</code>) is not writable, check the permissions for this folder! Without having write access to this folder, the plugin will not be able to email invoices.', 'woocommerce-pdf-invoices-packing-slips' ), WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ).'</span>':'',
 				)
 			),
 			array(
@@ -659,6 +712,8 @@ class Invoice extends OrderDocumentMethods {
 					'members' => array(
 						'enabled',
 						'attach_to_email_ids',
+						'include_email_link',
+						'include_email_link_placement',
 						'disable_for_statuses',
 						'my_account_buttons',
 					),
@@ -711,46 +766,6 @@ class Invoice extends OrderDocumentMethods {
 		);
 
 		return apply_filters( 'wpo_wcpdf_document_settings_categories', $settings_categories[ $output_format ] ?? array(), $output_format, $this );
-	}
-	
-	/**
-	 * Get UBL Format setting description
-	 * 
-	 * @return string
-	 */
-	private function get_ubl_format_description(): string {
-		$extensions_available   = array();
-		$ubl_format_description = '';
-		
-		if ( ! class_exists( 'WPO_IPS_XRechnung' ) ) {
-			$extensions_available['xrechnung'] = array(
-				'title' => __( 'EN16931 XRechnung', 'woocommerce-pdf-invoices-packing-slips' ),
-				'url'   => 'https://github.com/wpovernight/wpo-ips-xrechnung/releases/latest/',
-			);
-		}
-		
-		if ( ! empty( $extensions_available ) ) {
-			$ubl_format_description = __( 'Formats available through extensions', 'woocommerce-pdf-invoices-packing-slips' ) . ':';
-			
-			foreach ( $extensions_available as $extension ) {
-				$ubl_format_description .= ' <a href="' . esc_url( $extension['url'] ) . '" target="_blank">' . esc_html( $extension['title'] ) . '</a>';
-				
-				if ( next( $extensions_available ) ) {
-					$ubl_format_description .= ',';
-				} else {
-					$ubl_format_description .= '<br>';
-				}
-			}
-		}
-		
-		$ubl_format_description .= sprintf(
-			/* translators: %1$s: opening link tag, %2$s: closing link tag */
-			__( 'If the format you need isn\'t listed, please don\'t hesitate to %1$scontact us%2$s!', 'woocommerce-pdf-invoices-packing-slips' ),
-			'<a href="https://wpovernight.com/contact/" target="_blank">',
-			'</a>'
-		);
-		
-		return $ubl_format_description;
 	}
 
 }

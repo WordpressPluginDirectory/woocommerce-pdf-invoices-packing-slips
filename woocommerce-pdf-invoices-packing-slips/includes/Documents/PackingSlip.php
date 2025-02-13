@@ -179,7 +179,7 @@ class PackingSlip extends OrderDocumentMethods {
 			ob_start();
 			?>
 			<div class="notice notice-info inline">
-				<p><a href="https://wpovernight.com/downloads/woocommerce-pdf-invoices-packing-slips-professional/" target="_blank"><?php _e( 'Upgrade to our Professional extension to attach packing slips to any email!', 'woocommerce-pdf-invoices-packing-slips' ); ?></a></p>
+				<p><a href="https://wpovernight.com/downloads/woocommerce-pdf-invoices-packing-slips-professional/" target="_blank"><?php esc_html_e( 'Upgrade to our Professional extension to attach packing slips to any email!', 'woocommerce-pdf-invoices-packing-slips' ); ?></a></p>
 			</div>
 			<?php
 			$html = ob_get_clean();
@@ -205,8 +205,9 @@ class PackingSlip extends OrderDocumentMethods {
 		$settings_fields = apply_filters( 'wpo_wcpdf_settings_fields_documents_packing_slip', $settings_fields, $page, $option_group, $option_name );
 
 		// Allow plugins to alter settings fields.
+		$settings_fields = apply_filters( "wpo_wcpdf_settings_fields_documents_{$this->type}_pdf", $settings_fields, $page, $option_group, $option_name, $this );
+
 		if ( ! empty( $settings_fields ) ) {
-			$settings_fields = apply_filters( "wpo_wcpdf_settings_fields_documents_{$this->type}_pdf", $settings_fields, $page, $option_group, $option_name, $this );
 			WPO_WCPDF()->settings->add_settings_fields( $settings_fields, $page, $option_group, $option_name );
 		}
 	}

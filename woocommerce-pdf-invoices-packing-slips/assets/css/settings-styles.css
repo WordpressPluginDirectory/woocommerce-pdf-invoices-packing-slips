@@ -401,6 +401,7 @@ body.woocommerce_page_wpo_wcpdf_options_page {
 
 #wpo-wcpdf-preview-wrapper .sidebar .form-table > tbody > tr > td > input[type="text"],
 #wpo-wcpdf-preview-wrapper .sidebar .form-table > tbody > tr > td > input[type="url"],
+#wpo-wcpdf-preview-wrapper .sidebar .form-table > tbody > tr > td > input[type="email"],
 #wpo-wcpdf-preview-wrapper .sidebar .form-table > tbody > tr > td > select,
 #wpo-wcpdf-preview-wrapper .sidebar .form-table > tbody > tr > td > textarea {
 	max-width: none;
@@ -508,12 +509,44 @@ body.woocommerce_page_wpo_wcpdf_options_page {
 	font-size: 12px;
 }
 
-#wpo-wcpdf-settings .system-status-table {
+#wpo-wcpdf-settings .system-status-table,
+#wpo-wcpdf-settings .form-table {
 	margin-top: 2em;
+}
+
+#wpo-wcpdf-settings.status caption {
+	font-size: 1.3em;
+	font-weight: bold;
+	line-height: 1.3em;
+	padding-bottom: 0.5em;
+	text-align: left;
+}
+
+#wpo-wcpdf-settings .system-status-table > tbody > tr:nth-of-type(even) {
+	background-color: rgb(245 245 245);
+}
+
+#wpo-wcpdf-settings .system-status-table .valid-status {
+	color: #000;
+	background-color: #68de7c;
+}
+
+#wpo-wcpdf-settings .system-status-table .invalid-status {
+	color: #000;
+	background-color: #ffabaf;
+}
+
+#wpo-wcpdf-settings .system-status-table .warning-status {
+	color: #000;
+	background-color: #f2d675;
 }
 
 #wpo-wcpdf-preview-wrapper[data-preview-states="1"] .sidebar {
 	flex: 0 0 100%;
+}
+
+#wpo-wcpdf-preview-wrapper[data-preview-states="1"].ubl .sidebar > form {
+	max-width: 100%;
 }
 
 #wpo-wcpdf-preview-wrapper[data-preview-states="2"][data-preview-state="closed"] .sidebar {

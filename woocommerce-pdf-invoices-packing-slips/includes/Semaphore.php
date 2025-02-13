@@ -97,25 +97,35 @@ class Semaphore {
 	 */
 	private function ensure_database_initialised(): int {
 		global $wpdb;
-
-		$sql = $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name = %s", $this->option_name );
-
-		if ( 1 === (int) $wpdb->get_var( $sql ) ) {
+	
+		// Check if the lock option already exists
+		$existing_option = $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name = %s",
+				$this->option_name
+			)
+		);
+	
+		if ( 1 === (int) $existing_option ) {
 			$this->log( 'Lock option (' . $this->option_name . ', ' . $wpdb->options . ') already existed in the database', 'debug' );
 			return 1;
 		}
-
-		$sql = $wpdb->prepare( "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES(%s, '0', 'no');", $this->option_name );
-
-		$rows_affected = $wpdb->query( $sql );
-
+	
+		// Insert the lock option with a default value of 0
+		$rows_affected = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->prepare(
+				"INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '0', 'no')",
+				$this->option_name
+			)
+		);
+	
 		if ( $rows_affected > 0 ) {
 			$this->log( 'Lock option (' . $this->option_name . ', ' . $wpdb->options . ') was created in the database', 'debug' );
+			return 2;
 		} else {
-			$this->log( 'Lock option (' . $this->option_name . ', ' . $wpdb->options . ') failed to be created in the database (could already exist)', 'notice' );
+			$this->log( 'Lock option (' . $this->option_name . ', ' . $wpdb->options . ') failed to be created in the database', 'notice' );
+			return 0;
 		}
-
-		return ( $rows_affected > 0 ) ? 2 : 0;
 	}
 
 	/**
@@ -135,10 +145,16 @@ class Semaphore {
 		$time_now      = time();
 		$retries       = $retries > 0 ? $retries : $this->retries;
 		$acquire_until = $time_now + $this->locked_for;
+		$query         = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->prepare(
+				"UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value < %d",
+				$acquire_until,
+				$this->option_name,
+				$time_now
+			)
+		);
 
-		$sql = $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value < %d", $acquire_until, $this->option_name, $time_now );
-
-		if ( 1 === $wpdb->query( $sql ) ) {
+		if ( 1 === $query ) {
 			$this->log( 'Lock (' . $this->option_name . ', ' . $wpdb->options . ') acquired', 'info' );
 			$this->acquired = true;
 			return true;
@@ -150,20 +166,36 @@ class Semaphore {
 		}
 
 		do {
+			$query = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$wpdb->prepare(
+					"UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value < %d",
+					$acquire_until,
+					$this->option_name,
+					$time_now
+				)
+			);
+			
 			// Now that the row has been created, try again
-			if ( 1 === $wpdb->query( $sql ) ) {
+			if ( 1 === $query ) {
 				$this->log( 'Lock (' . $this->option_name . ', ' . $wpdb->options . ') acquired after initialising the database', 'info' );
 				$this->acquired = true;
 				return true;
 			}
+			
 			$retries--;
+			
 			if ( $retries >= 0 ) {
 				$this->log( 'Lock (' . $this->option_name . ', ' . $wpdb->options . ') not yet acquired; sleeping', 'debug' );
 				sleep( 1 );
 				// As a second has passed, update the time we are aiming for
 				$time_now = time();
 				$acquire_until = $time_now + $this->locked_for;
-				$sql = $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value < %d", $acquire_until, $this->option_name, $time_now );
+				$sql = $wpdb->prepare(
+					"UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value < %d",
+					$acquire_until,
+					$this->option_name,
+					$time_now
+				);
 			}
 		} while ( $retries >= 0 );
 
@@ -185,11 +217,15 @@ class Semaphore {
 		}
 
 		global $wpdb;
-		$sql = $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = '0' WHERE option_name = %s", $this->option_name );
-
+		
 		$this->log( 'Lock option (' . $this->option_name . ', ' . $wpdb->options . ') released', 'info' );
 
-		$result = (int) $wpdb->query( $sql ) === 1;
+		$result = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->prepare(
+				"UPDATE {$wpdb->options} SET option_value = '0' WHERE option_name = %s",
+				$this->option_name
+			)
+		) === 1;
 
 		$this->acquired = false;
 
@@ -206,7 +242,12 @@ class Semaphore {
 		$this->acquired = false;
 
 		global $wpdb;
-		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s", $this->option_name ) );
+		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name = %s",
+				$this->option_name
+			)
+		);
 
 		$this->log( 'Lock option (' . $this->option_name . ', ' . $wpdb->options . ') was deleted from the database' );
 	}
@@ -279,7 +320,7 @@ class Semaphore {
 
 		$option_prefix = $legacy ? self::$legacy_option_prefix : self::$option_prefix;
 
-		$wpdb->query(
+		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$wpdb->prepare(
 				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s AND option_value = '0'",
 				$wpdb->esc_like( $option_prefix ) . '%'
@@ -299,7 +340,7 @@ class Semaphore {
 
 		$option_prefix = $legacy ? self::$legacy_option_prefix : self::$option_prefix;
 
-		$count = (int) $wpdb->get_var(
+		$count = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$wpdb->prepare(
 				"SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s AND option_value = '0'",
 				$wpdb->esc_like( $option_prefix ) . '%'

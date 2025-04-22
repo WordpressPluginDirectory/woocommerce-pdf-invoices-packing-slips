@@ -114,6 +114,11 @@ class SettingsDebug {
 		if ( ! wp_verify_nonce( $nonce, 'wp_wcpdf_settings_page_nonce' ) ) {
 			return;
 		}
+		
+		if ( ! function_exists( '\\as_has_scheduled_action' ) ) {
+			wcpdf_log_error( 'Action Scheduler is not available. Cannot fetch numbers table data.', 'critical' );
+			return;
+		}
 
 		global $wpdb;
 
@@ -134,7 +139,7 @@ class SettingsDebug {
 
 		$document_type = $this->get_document_type_from_store_table_name( sanitize_text_field( wp_unslash( $_GET['table_name'] ) ) );
 		$list_table    = new NumberStoreListTable();
-		$as_actions    = as_has_scheduled_action( 'wpo_wcpdf_number_table_data_fetch' );
+		$as_actions    = \as_has_scheduled_action( 'wpo_wcpdf_number_table_data_fetch' );
 		$last_fetch    = get_option( "wpo_wcpdf_number_data::{$selected_table_name}::last_time" );
 
 		$list_table->prepare_items();
@@ -389,8 +394,7 @@ class SettingsDebug {
 		$file_data = [];
 
 		if ( ! empty( $_FILES['file']['tmp_name'] ) && ! empty( $_FILES['file']['name'] ) ) {
-			$wp_filesystem = wpo_wcpdf_get_wp_filesystem();
-			$json_data     = $wp_filesystem->get_contents( $_FILES['file']['tmp_name'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$json_data = WPO_WCPDF()->file_system->get_contents( $_FILES['file']['tmp_name'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 			if ( ! $json_data ) {
 				$message = __( 'Failed to get contents from JSON file!', 'woocommerce-pdf-invoices-packing-slips' );
@@ -751,6 +755,31 @@ class SettingsDebug {
 			),
 			array(
 				'type'     => 'setting',
+				'id'       => 'file_system_method',
+				'title'    => __( 'File System Method', 'woocommerce-pdf-invoices-packing-slips' ),
+				'callback' => 'select',
+				'section'  => 'debug_settings',
+				'args'     => array(
+					'option_name' => $option_name,
+					'id'          => 'file_system_method',
+					'default'     => 'wp_filesystem',
+					'options'     => array(
+						'wp'  => __( 'WP Filesystem API (recommended)', 'woocommerce-pdf-invoices-packing-slips' ),
+						'php' => __( 'PHP filesystem functions', 'woocommerce-pdf-invoices-packing-slips' ),
+					),
+					'description' => sprintf(
+						/* translators: 1. WP Filesystem, 2. direct */
+						__( 'Choose the filesystem method for file operations. By default, our plugin uses %1$s (only supported in %2$s mode). Select PHP file functions if you encounter issues with %1$s.', 'woocommerce-pdf-invoices-packing-slips' ),
+						'<code>WP Filesystem</code>',
+						'<code>direct</code>'
+					) . ( has_filter( 'wpo_wcpdf_filesystem_method' ) 
+						? '<div class="notice notice-warning inline"><p><strong>' . __( 'Warning:', 'woocommerce-pdf-invoices-packing-slips' ) . '</strong> ' . __( 'A code snippet is overriding this setting.', 'woocommerce-pdf-invoices-packing-slips' ) . '</p></div>'
+						: ''
+					),
+				)
+			),
+			array(
+				'type'     => 'setting',
 				'id'	   => 'document_link_access_type',
 				'title'	   => __( 'Document link access type', 'woocommerce-pdf-invoices-packing-slips' ),
 				'callback' => 'select',
@@ -1032,9 +1061,12 @@ class SettingsDebug {
 	 * @return array
 	 */
 	public function get_server_config(): array {
+		$debug_settings    = WPO_WCPDF()->settings->debug_settings;
+		$filesystem_method = apply_filters( 'wpo_wcpdf_filesystem_method', $debug_settings['file_system_method'] ?? 'wp' );
+		$filesystem_method = 'wp' === $filesystem_method && function_exists( 'get_filesystem_method' ) ? get_filesystem_method() : $filesystem_method;
+		
 		$memory_limit      = function_exists( 'wc_let_to_num' ) ? wc_let_to_num( WP_MEMORY_LIMIT ) : woocommerce_let_to_num( WP_MEMORY_LIMIT );
 		$php_mem_limit     = function_exists( 'memory_get_usage' ) ? @ini_get( 'memory_limit' ) : '-';
-		$filesystem_method = function_exists( 'get_filesystem_method' ) ? get_filesystem_method() : 'direct';
 		$gmagick           = extension_loaded( 'gmagick' );
 		$imagick           = extension_loaded( 'imagick' );
 		$xc                = extension_loaded( 'xcache' );
@@ -1114,7 +1146,7 @@ class SettingsDebug {
 			'WP Filesystem Method' => array(
 				'required' => __( 'Required to save documents to the server', 'woocommerce-pdf-invoices-packing-slips' ),
 				'value'    => $filesystem_method,
-				'result'   => 'direct' === $filesystem_method,
+				'result'   => in_array( $filesystem_method, array( 'direct', 'php' ) ),
 				'fallback' => __( 'Check your server configuration', 'woocommerce-pdf-invoices-packing-slips' ),
 			),
 			'allow_url_fopen' => array (
@@ -1280,8 +1312,6 @@ class SettingsDebug {
 	 * @return array
 	 */
 	public function get_directory_permissions(): array {
-		$wp_filesystem = wpo_wcpdf_get_wp_filesystem();
-
 		$status = array(
 			'ok'     => __( 'Writable', 'woocommerce-pdf-invoices-packing-slips' ),
 			'failed' => __( 'Not writable', 'woocommerce-pdf-invoices-packing-slips' ),
@@ -1291,26 +1321,26 @@ class SettingsDebug {
 			'WCPDF_TEMP_DIR'       => array(
 				'description'    => __( 'Central temporary plugin folder', 'woocommerce-pdf-invoices-packing-slips' ),
 				'value'          => WPO_WCPDF()->main->get_tmp_path(),
-				'status'         => $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path() ) ? 'ok' : 'failed',
-				'status_message' => $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path() ) ? $status['ok'] : $status['failed'],
+				'status'         => WPO_WCPDF()->file_system->is_writable( WPO_WCPDF()->main->get_tmp_path() ) ? 'ok' : 'failed',
+				'status_message' => WPO_WCPDF()->file_system->is_writable( WPO_WCPDF()->main->get_tmp_path() ) ? $status['ok'] : $status['failed'],
 			),
 			'WCPDF_ATTACHMENT_DIR' => array(
 				'description'    => __( 'Temporary attachments folder', 'woocommerce-pdf-invoices-packing-slips' ),
 				'value'          => trailingslashit( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ),
-				'status'         => $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ) ? 'ok' : 'failed',
-				'status_message' => $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ) ? $status['ok'] : $status['failed'],
+				'status'         => WPO_WCPDF()->file_system->is_writable( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ) ? 'ok' : 'failed',
+				'status_message' => WPO_WCPDF()->file_system->is_writable( WPO_WCPDF()->main->get_tmp_path( 'attachments' ) ) ? $status['ok'] : $status['failed'],
 			),
 			'DOMPDF_TEMP_DIR'      => array(
 				'description'    => __( 'Temporary DOMPDF folder', 'woocommerce-pdf-invoices-packing-slips' ),
 				'value'          => trailingslashit( WPO_WCPDF()->main->get_tmp_path( 'dompdf' ) ),
-				'status'         => $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path( 'dompdf' ) ) ? 'ok' : 'failed',
-				'status_message' => $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path( 'dompdf' ) ) ? $status['ok'] : $status['failed'],
+				'status'         => WPO_WCPDF()->file_system->is_writable( WPO_WCPDF()->main->get_tmp_path( 'dompdf' ) ) ? 'ok' : 'failed',
+				'status_message' => WPO_WCPDF()->file_system->is_writable( WPO_WCPDF()->main->get_tmp_path( 'dompdf' ) ) ? $status['ok'] : $status['failed'],
 			),
 			'DOMPDF_FONT_DIR'      => array(
 				'description'    => __( 'DOMPDF fonts folder (needs to be writable for custom/remote fonts)', 'woocommerce-pdf-invoices-packing-slips' ),
 				'value'          => trailingslashit( WPO_WCPDF()->main->get_tmp_path( 'fonts' ) ),
-				'status'         => $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path( 'fonts' ) ) ? 'ok' : 'failed',
-				'status_message' => $wp_filesystem->is_writable( WPO_WCPDF()->main->get_tmp_path( 'fonts' ) ) ? $status['ok'] : $status['failed'],
+				'status'         => WPO_WCPDF()->file_system->is_writable( WPO_WCPDF()->main->get_tmp_path( 'fonts' ) ) ? 'ok' : 'failed',
+				'status_message' => WPO_WCPDF()->file_system->is_writable( WPO_WCPDF()->main->get_tmp_path( 'fonts' ) ) ? $status['ok'] : $status['failed'],
 			),
 		);
 
@@ -1323,11 +1353,16 @@ class SettingsDebug {
 	 * @return array|false
 	 */
 	public function get_yearly_reset_schedule() {
-		if ( ! WPO_WCPDF()->settings->maybe_schedule_yearly_reset_numbers() || ! function_exists( 'as_get_scheduled_actions' ) ) {
+		if ( ! WPO_WCPDF()->settings->maybe_schedule_yearly_reset_numbers() ) {
+			return false;
+		}
+		
+		if ( ! function_exists( '\\as_get_scheduled_actions' ) ) {
+			wcpdf_log_error( 'Action Scheduler function not available. Cannot retrieve the yearly numbering reset schedule.', 'critical' );
 			return false;
 		}
 
-		$scheduled_actions = as_get_scheduled_actions( array(
+		$scheduled_actions = \as_get_scheduled_actions( array(
 			'hook'   => 'wpo_wcpdf_schedule_yearly_reset_numbers',
 			'status' => \ActionScheduler_Store::STATUS_PENDING,
 		) );
@@ -1339,7 +1374,7 @@ class SettingsDebug {
 				$action       = reset( $scheduled_actions );
 				$action_date  = is_callable( array( $action->get_schedule(), 'get_date' ) ) ?
 					$action->get_schedule()->get_date() :
-					$action->get_schedule()->get_next( as_get_datetime_object() );
+					$action->get_schedule()->get_next( \as_get_datetime_object() );
 
 				$yearly_reset = array(
 					'value'  => sprintf(
@@ -1436,7 +1471,12 @@ class SettingsDebug {
 		$chunk_results = $wpdb->get_results( $query ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( empty( $chunk_results ) ) {
-			as_unschedule_all_actions( $hook );
+			if ( function_exists( '\\as_unschedule_all_actions' ) ) {
+				\as_unschedule_all_actions( $hook );
+			} else {
+				wcpdf_log_error( 'Action Scheduler function not available. Cannot unschedule number table data fetch.', 'critical' );
+			}
+			
 			update_option( $option_name . '::last_time', time() );
 			return; // exit if no more results
 		}
@@ -1457,7 +1497,11 @@ class SettingsDebug {
 			'offset'     => $offset,
 		);
 
-		as_enqueue_async_action( $hook, $args );
+		if ( function_exists( '\\as_enqueue_async_action' ) ) {
+			\as_enqueue_async_action( $hook, $args );
+		} else {
+			wcpdf_log_error( 'Action Scheduler function not available. Cannot queue next number table data fetch.', 'critical' );
+		}
 	}
 
 	/**
@@ -1684,17 +1728,26 @@ class SettingsDebug {
 		$debug_settings = WPO_WCPDF()->settings->debug_settings;
 		$enabled        = isset( $debug_settings['check_unstable_versions'] );
 		
+		if (
+			! function_exists( '\\as_next_scheduled_action' ) ||
+			! function_exists( '\\as_unschedule_all_actions' ) ||
+			! function_exists( '\\as_schedule_recurring_action' )
+		) {
+			wcpdf_log_error( 'Action Scheduler functions not available. Cannot schedule or unschedule the daily unstable version check.', 'critical' );
+			return;
+		}
+		
 		// Unschedule all pending actions
 		if ( ! $enabled ) {
-			if ( as_next_scheduled_action( $hook ) ) {
-				as_unschedule_all_actions( $hook );
+			if ( \as_next_scheduled_action( $hook ) ) {
+				\as_unschedule_all_actions( $hook );
 			}
 			return;
 		}		
 
 		// Schedule the action if not already scheduled
-		if ( ! as_next_scheduled_action( $hook ) ) {
-			as_schedule_recurring_action( time(), DAY_IN_SECONDS, $hook );
+		if ( ! \as_next_scheduled_action( $hook ) ) {
+			\as_schedule_recurring_action( time(), DAY_IN_SECONDS, $hook );
 		}
 	}
 	

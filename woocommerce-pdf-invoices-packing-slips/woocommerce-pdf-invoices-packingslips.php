@@ -4,7 +4,7 @@
  * Requires Plugins:     woocommerce
  * Plugin URI:           https://wpovernight.com/downloads/woocommerce-pdf-invoices-packing-slips-bundle/
  * Description:          Create, print & email PDF or UBL Invoices & PDF Packing Slips for WooCommerce orders.
- * Version:              4.3.0
+ * Version:              4.4.0
  * Author:               WP Overnight
  * Author URI:           https://www.wpovernight.com
  * License:              GPLv2 or later
@@ -22,7 +22,7 @@ if ( ! class_exists( 'WPO_WCPDF' ) ) :
 
 class WPO_WCPDF {
 
-	public $version              = '4.3.0';
+	public $version              = '4.4.0';
 	public $version_php          = '7.4';
 	public $version_woo          = '3.3';
 	public $version_wp           = '4.4';
@@ -30,6 +30,7 @@ class WPO_WCPDF {
 	public $legacy_addons;
 	public $third_party_plugins;
 	public $order_util;
+	public $file_system;
 	public $settings;
 	public $documents;
 	public $main;
@@ -72,7 +73,7 @@ class WPO_WCPDF {
 		// load the localisation & classes
 		add_action( 'init', array( $this, 'translations' ), 8 );
 		add_action( 'init', array( $this, 'load_classes' ), 9 ); // Pro runs on default 10, if this runs after it will not work
-		add_action( 'in_plugin_update_message-'.$this->plugin_basename, array( $this, 'in_plugin_update_message' ) );
+		add_action( 'in_plugin_update_message-' . $this->plugin_basename, array( $this, 'in_plugin_update_message' ) );
 		add_action( 'before_woocommerce_init', array( $this, 'woocommerce_hpos_compatible' ) );
 		add_action( 'admin_notices', array( $this, 'nginx_detected' ) );
 		add_action( 'admin_notices', array( $this, 'mailpoet_mta_detected' ) );
@@ -151,10 +152,11 @@ class WPO_WCPDF {
 		include_once $this->plugin_path() . '/wpo-ips-functions.php';
 		include_once $this->plugin_path() . '/wpo-ips-functions-ubl.php';
 
-		// Third party compatibility
+		// Compatibility classes
 		$this->third_party_plugins = \WPO\IPS\Compatibility\ThirdPartyPlugins::instance();
-		// WC OrderUtil compatibility
 		$this->order_util          = \WPO\IPS\Compatibility\OrderUtil::instance();
+		$this->file_system         = \WPO\IPS\Compatibility\FileSystem::instance();
+
 		// Plugin classes
 		$this->settings            = \WPO\IPS\Settings::instance();
 		$this->documents           = \WPO\IPS\Documents::instance();
@@ -171,20 +173,37 @@ class WPO_WCPDF {
 	 * Instantiate classes when woocommerce is activated
 	 */
 	public function load_classes() {
-		if ( ! $this->is_woocommerce_activated() || ! $this->is_dependency_version_supported( 'woo' ) ) {
-			add_action( 'admin_notices', array ( $this, 'need_woocommerce' ) );
+		if ( ! $this->dependencies_are_ready() ) {
 			return;
 		}
-
-		if ( ! has_filter( 'wpo_wcpdf_pdf_maker' ) && ! $this->is_dependency_version_supported( 'php' ) ) {
-			add_filter( 'wpo_wcpdf_document_is_allowed', '__return_false', 99999 );
-			add_action( 'admin_notices', array ( $this, 'required_php_version' ) );
-		}
-
+		
 		add_action( 'admin_init', array( $this, 'deactivate_legacy_addons') );
-
+		
 		// all systems ready - GO!
 		$this->includes();
+	}
+	
+	/**
+	 * Check if WooCommerce and PHP dependencies are met.
+	 * If not, show the appropriate admin notices.
+	 *
+	 * @return bool
+	 */
+	public function dependencies_are_ready(): bool {
+		// Check if WooCommerce is activated and meets the minimum version
+		if ( ! $this->is_woocommerce_activated() || ! $this->is_dependency_version_supported( 'woo' ) ) {
+			add_action( 'admin_notices', array( $this, 'need_woocommerce' ) );
+			return false;
+		}
+
+		// Check if PHP version is supported
+		if ( ! has_filter( 'wpo_wcpdf_pdf_maker' ) && ! $this->is_dependency_version_supported( 'php' ) ) {
+			add_filter( 'wpo_wcpdf_document_is_allowed', '__return_false', 99999 );
+			add_action( 'admin_notices', array( $this, 'required_php_version' ) );
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
@@ -469,7 +488,8 @@ class WPO_WCPDF {
 			return;
 		}
 
-		if ( ! function_exists( 'as_get_scheduled_actions' ) ) {
+		if ( ! function_exists( '\\as_get_scheduled_actions' ) ) {
+			wcpdf_log_error( 'Action Scheduler function not available. Cannot verify if the yearly numbering reset action is scheduled.', 'critical' );
 			return;
 		}
 
@@ -591,7 +611,7 @@ class WPO_WCPDF {
 			}
 		}
 	}
-	
+
 	/**
 	 * Show a one-time notice about the new "Check for unstable versions" option.
 	 *
@@ -649,7 +669,7 @@ class WPO_WCPDF {
 		</div>
 		<?php
 	}
-	
+
 	/**
 	 * Display a notice when a new unstable version is available.
 	 *
@@ -711,7 +731,7 @@ class WPO_WCPDF {
 		</div>
 		<?php
 	}
-	
+
 	/**
 	 * Store the new unstable version if version checking is enabled.
 	 *

@@ -1,8 +1,6 @@
 <?php
 namespace WPO\IPS\Documents;
 
-use WPO\IPS\UBL\Builders\SabreBuilder;
-use WPO\IPS\UBL\Documents\UblDocument;
 use WPO\IPS\Semaphore;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -135,17 +133,22 @@ abstract class OrderDocument {
 		return;
 	}
 
-	public function init_settings_data() {
-		// don't override/save settings on Preview requests
-		if ( isset( $_REQUEST['action'] ) && 'wpo_wcpdf_preview' === $_REQUEST['action'] && isset( $_REQUEST['security'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['security'] ) ), 'wpo_wcpdf_preview' ) ) {
-			return;
-		}
-
+	public function init_settings_data(): void {
 		// order
 		$this->order_settings  = $this->get_order_settings();
 		// pdf
 		$this->settings        = $this->get_settings();
 		$this->latest_settings = $this->get_settings( true );
+
+		// don't override/save settings on Preview requests
+		if (
+			isset( $_REQUEST['action'] ) &&
+			'wpo_wcpdf_preview' === $_REQUEST['action'] &&
+			isset( $_REQUEST['security'] ) &&
+			wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['security'] ) ), 'wpo_wcpdf_preview' )
+		) {
+			return;
+		}
 
 		// save settings
 		$this->save_settings( $this->maybe_use_latest_settings() );
@@ -218,7 +221,7 @@ abstract class OrderDocument {
 					if ( isset( $settings['display_date'] ) && 'order_date' === $settings['display_date'] ) {
 						$this->order->update_meta_data( "_wcpdf_{$this->slug}_display_date", 'order_date' );
 					} else {
-						$this->order->update_meta_data( "_wcpdf_{$this->slug}_display_date", 'invoice_date' );
+						$this->order->update_meta_data( "_wcpdf_{$this->slug}_display_date", 'document_date' );
 					}
 				}
 
@@ -227,44 +230,47 @@ abstract class OrderDocument {
 		}
 	}
 
-	public function initiate_number( $force_new_number = false ) {
-		$semaphore       = new Semaphore( "initiate_{$this->slug}_number" );
-		$document_number = $this->exists() ? $this->get_data( 'number' ) : null;
-		$document_number = ! empty( $document_number ) && $force_new_number ? null : $document_number;
+	/**
+	 * Initiate and set document date and display_date.
+	 *
+	 * @return void
+	 */
+	public function initiate_date(): void {
+		if ( isset( $this->settings['display_date'] ) && 'order_date' === $this->settings['display_date'] && ! empty( $this->order ) ) {
+			$this->set_date( $this->order->get_date_created() );
+			$this->set_display_date( 'order_date' );
+		} elseif ( empty( $this->get_date() ) ) {
+			$this->set_date( current_time( 'timestamp', true ) );
+			$this->set_display_date( 'document_date' );
+		}
+	}
 
-		if ( $semaphore->lock() && empty( $document_number ) ) {
+	/**
+	 * Initiate and set document number.
+	 *
+	 * @param bool $force_new_number
+	 *
+	 * @return mixed
+	 */
+	public function initiate_number( bool $force_new_number = false ) {
+		$semaphore       = new Semaphore( "initiate_{$this->slug}_number" );
+		$document_number = $force_new_number ? null : ( $this->exists() ? $this->get_data( 'number' ) : null );
+		$document_number = apply_filters( 'wpo_wcpdf_initiate_number', $document_number, $this );
+
+		if ( ! empty( $document_number ) ) {
+			return $document_number;
+		}
+
+		if ( $semaphore->lock() ) {
 			$semaphore->log( "Lock acquired for the {$this->slug} number init.", 'info' );
 
 			try {
-				// If a third-party plugin claims to generate document numbers, trigger this instead
-				if ( apply_filters( "woocommerce_{$this->slug}_number_by_plugin", false ) || apply_filters( "wpo_wcpdf_external_{$this->slug}_number_enabled", false, $this ) ) {
-					$document_number = apply_filters( "woocommerce_generate_{$this->slug}_number", $document_number, $this->order );  // legacy (backwards compatibility)
-					$document_number = apply_filters( "woocommerce_{$this->slug}_number", $document_number, $this->order->get_id() ); // legacy (backwards compatibility)
-					$document_number = apply_filters( "wpo_wcpdf_external_{$this->slug}_number", $document_number, $this );
-				} elseif ( isset( $this->settings['display_number'] ) && 'order_number' === $this->settings['display_number'] && ! empty( $this->order ) ) {
-					$document_number = $this->order->get_order_number();
-				}
-
-				if ( ! empty( $document_number ) ) { // overridden by plugin or set to order number
-					if ( ! is_numeric( $document_number ) && ! ( $document_number instanceof DocumentNumber ) ) {
-						// document number is not numeric, treat as formatted
-						// try to extract meaningful number data
-						$formatted_number = $document_number;
-						$number           = (int) preg_replace( '/\D/', '', $document_number );
-						$document_number  = compact( 'number', 'formatted_number' );
-					}
-				} else {
-					$number_store    = $this->get_sequential_number_store();
-					$document_number = $number_store->increment( intval( $this->order_id ), $this->get_date()->date_i18n( 'Y-m-d H:i:s' ) );
-				}
+				$document_number = $this->get_document_number( true );
 
 				if ( ! is_null( $document_number ) ) {
 					$this->set_number( $document_number );
 				}
-
-			} catch ( \Exception $e ) {
-				$semaphore->log( $e, 'critical' );
-			} catch ( \Error $e ) {
+			} catch ( \Exception|\Error $e ) {
 				$semaphore->log( $e, 'critical' );
 			}
 
@@ -274,6 +280,58 @@ abstract class OrderDocument {
 
 		} else {
 			$semaphore->log( "Couldn't get the lock for the {$this->slug} number init.", 'critical' );
+		}
+
+		return $document_number;
+	}
+
+	/**
+	 * Get the document number.
+	 *
+	 * @param bool $generate
+	 *
+	 * @return mixed
+	 */
+	public function get_document_number( bool $generate = false ) {
+		$document_number = null;
+
+		// If a third-party plugin claims to generate document numbers, trigger this instead
+		if (
+			apply_filters( "woocommerce_{$this->slug}_number_by_plugin", false ) ||
+			apply_filters( "wpo_wcpdf_external_{$this->slug}_number_enabled", false, $this )
+		) {
+			$document_number = apply_filters( "woocommerce_generate_{$this->slug}_number", $document_number, $this->order );  // legacy (backwards compatibility)
+			$document_number = apply_filters( "woocommerce_{$this->slug}_number", $document_number, $this->order->get_id() ); // legacy (backwards compatibility)
+			$document_number = apply_filters( "wpo_wcpdf_external_{$this->slug}_number", $document_number, $this );
+			
+		// If the document number is set to be the order number
+		} elseif (
+			isset( $this->settings['display_number'] ) &&
+			'order_number' === $this->settings['display_number'] &&
+			! empty( $this->order )
+		) {
+			$document_number = $this->order->get_order_number();
+		}
+
+		// Document number overridden by plugin or set to order number
+		if ( ! empty( $document_number ) ) {
+			if ( ! is_numeric( $document_number ) && ! ( $document_number instanceof DocumentNumber ) ) {
+				// document number is not numeric, treat as formatted
+				// try to extract meaningful number data
+				$formatted_number = $document_number;
+				$number           = (int) preg_replace( '/\D/', '', $document_number );
+				$document_number  = compact( 'number', 'formatted_number' );
+			}
+			
+		// Otherwise, get or generate the document number
+		} else {
+			$number_store = $this->get_sequential_number_store();
+
+			if ( $generate ) {
+				$document_number = $number_store->increment( intval( $this->order_id ), $this->get_date()->date_i18n( 'Y-m-d H:i:s' ) );
+			} else {
+				$document_number = $number_store->get_next();
+			}
 		}
 
 		return $document_number;
@@ -1150,11 +1208,10 @@ abstract class OrderDocument {
 	 * Output template styles
 	 */
 	public function template_styles() {
-		$wp_filesystem = wpo_wcpdf_get_wp_filesystem();
 		$css_file_path = apply_filters( 'wpo_wcpdf_template_styles_file', $this->locate_template_file( 'style.css' ) );
 		$css           = '';
 
-		if ( $wp_filesystem->exists( $css_file_path ) ) {
+		if ( WPO_WCPDF()->file_system->exists( $css_file_path ) ) {
 			ob_start();
 			include $css_file_path;
 			$css = ob_get_clean();
@@ -1382,15 +1439,17 @@ abstract class OrderDocument {
 		// maybe we need to reinstall fonts first?
 		WPO_WCPDF()->main->maybe_reinstall_fonts();
 
-		$pdf = null;
+		$pdf_file = apply_filters( 'wpo_wcpdf_load_pdf_file_path', null, $this );
 
-		if ( $pdf_file = apply_filters( 'wpo_wcpdf_load_pdf_file_path', null, $this ) ) {
-			$wp_filesystem = wpo_wcpdf_get_wp_filesystem();
-			$pdf = $wp_filesystem->get_contents( $pdf_file );
+		if ( $pdf_file ) {
+			$pdf = WPO_WCPDF()->file_system->get_contents( $pdf_file );
+		} else {
+			$pdf = null;
 		}
 
 		$pdf = apply_filters( 'wpo_wcpdf_pdf_data', $pdf, $this );
-		if ( !empty( $pdf ) ) {
+		
+		if ( ! empty( $pdf ) ) {
 			return $pdf;
 		}
 
@@ -1490,40 +1549,35 @@ abstract class OrderDocument {
 	}
 
 	public function output_ubl( $contents_only = false ) {
-		$ubl_maker    = wcpdf_get_ubl_maker();
-		$ubl_document = new UblDocument();
-
 		$document = $contents_only ? $this : wcpdf_get_document( $this->get_type(), $this->order, true );
 
-		if ( $document ) {
-			$ubl_document->set_order_document( $document );
-		} else {
+		if ( ! $document ) {
 			wcpdf_log_error( 'Error generating order document for UBL!', 'error' );
 			exit();
 		}
-
-		$builder  = new SabreBuilder();
-		$contents = $builder->build( $ubl_document );
-
-		if ( $contents_only ) {
-			return $contents;
+		
+		$filename_or_contents = wpo_ips_write_ubl_file( $document, false, $contents_only );
+		
+		if ( ! $filename_or_contents ) {
+			wcpdf_log_error( 'Error writing UBL file!', 'error' );
+			exit();
 		}
 
-		$filename      = $document->get_filename( 'download', array( 'output' => 'ubl' ) );
-		$full_filename = $ubl_maker->write( $filename, $contents );
-		$quoted        = sprintf( '"%s"', addcslashes( basename( $full_filename ), '"\\' ) );
-		$size          = filesize( $full_filename );
+		if ( $contents_only ) {
+			return $filename_or_contents;
+		}
+		
+		$quoted = sprintf( '"%s"', addcslashes( basename( $filename_or_contents ), '"\\' ) );
+		$size   = filesize( $filename_or_contents );
 
 		wcpdf_ubl_headers( $quoted, $size );
-
-		$wp_filesystem = wpo_wcpdf_get_wp_filesystem();
-
+		
 		ob_clean();
 		flush();
-
-		if ( $wp_filesystem->exists( $full_filename ) ) {
-			echo $wp_filesystem->get_contents( $full_filename ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-			wp_delete_file( $full_filename );
+		
+		if ( WPO_WCPDF()->file_system->exists( $filename_or_contents ) ) {
+			echo WPO_WCPDF()->file_system->get_contents( $filename_or_contents ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			wp_delete_file( $filename_or_contents );
 		}
 
 		exit();
@@ -1571,14 +1625,15 @@ abstract class OrderDocument {
 	}
 
 	public function locate_template_file( $file ) {
-		if (empty($file)) {
-			$file = $this->type.'.php';
+		if ( empty( $file ) ) {
+			$file = $this->type . '.php';
 		}
-		$path = $this->get_template_path();
-		$file_path = "{$path}/{$file}";
-
+		
+		$path               = $this->get_template_path();
+		$file_path          = "{$path}/{$file}";
 		$fallback_file_path = WPO_WCPDF()->plugin_path() . '/templates/Simple/' . $file;
-		if ( !file_exists( $file_path ) && file_exists( $fallback_file_path ) ) {
+		
+		if ( ! WPO_WCPDF()->file_system->exists( $file_path ) && WPO_WCPDF()->file_system->exists( $fallback_file_path ) ) {
 			$file_path = $fallback_file_path;
 		}
 
@@ -1593,9 +1648,10 @@ abstract class OrderDocument {
 		if ( ! empty( $args ) && is_array( $args ) ) {
 			extract( $args );
 		}
+		
 		ob_start();
-		if (file_exists($file)) {
-			include($file);
+		if ( WPO_WCPDF()->file_system->exists( $file ) ) {
+			include( $file );
 		}
 		return ob_get_clean();
 	}
@@ -1772,7 +1828,7 @@ abstract class OrderDocument {
 	 */
 	public function maybe_retire_number_store( $date, $store_base_name, $method ) {
 		global $wpdb;
-		
+
 		$was_showing_errors = $wpdb->hide_errors(); // if we encounter errors, we'll log them instead
 		$default_table_name = $this->get_number_store_table_default_name( $store_base_name, $method );
 		$now                = new \WC_DateTime( 'now', new \DateTimeZone( 'UTC' ) );
@@ -1806,12 +1862,12 @@ abstract class OrderDocument {
 
 		if ( $retired_exists ) {
 			$drop_query = wpo_wcpdf_prepare_identifier_query(
-				"DROP TABLE IF EXISTS %i", 
+				"DROP TABLE IF EXISTS %i",
 				array( $retired_table_name )
 			);
-			
+
 			$table_removed = $wpdb->query( $drop_query ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
-			
+
 			if ( ! $table_removed ) {
 				wcpdf_log_error( sprintf(
 					'An error occurred while trying to remove the duplicate number store %s: %s',
@@ -1832,12 +1888,12 @@ abstract class OrderDocument {
 
 		if ( $default_exists ) {
 			$rename_query = wpo_wcpdf_prepare_identifier_query(
-				"ALTER TABLE %i RENAME TO %i", 
+				"ALTER TABLE %i RENAME TO %i",
 				array( $default_table_name, $retired_table_name )
 			);
-			
+
 			$table_renamed = $wpdb->query( $rename_query ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
-			
+
 			if ( ! $table_renamed ) {
 				wcpdf_log_error( sprintf(
 					'An error occurred while trying to rename the number store from %s to %s: %s',
@@ -1859,12 +1915,12 @@ abstract class OrderDocument {
 
 		if ( $current_year_exists ) {
 			$rename_query = wpo_wcpdf_prepare_identifier_query(
-				"ALTER TABLE %i RENAME TO %i", 
+				"ALTER TABLE %i RENAME TO %i",
 				array( $current_year_table_name, $default_table_name )
 			);
-			
+
 			$table_renamed = $wpdb->query( $rename_query ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
-			
+
 			if ( ! $table_renamed ) {
 				wcpdf_log_error( sprintf(
 					'An error occurred while trying to rename the number store from %s to %s: %s',
@@ -1883,7 +1939,7 @@ abstract class OrderDocument {
 		// current store year has been updated to current year, returning this means no year suffix has to be used
 		return $current_year;
 	}
-	
+
 	/**
 	 * Gets the year from the last row of a number store table.
 	 *
@@ -1901,7 +1957,7 @@ abstract class OrderDocument {
 			$next_year    = new \WC_DateTime( '1st January Next Year' );
 			$current_year = intval( $next_year->date_i18n( 'Y' ) );
 		}
-		
+
 		$table_name_safe = wpo_wcpdf_sanitize_identifier( $table_name );
 
 		// Check if table exists

@@ -846,8 +846,17 @@ class SettingsDebug {
 				'args'     => array(
 					'option_name' => $option_name,
 					'id'          => 'pretty_document_links',
-					'description' => __( 'Changes the document links to a prettier URL scheme.', 'woocommerce-pdf-invoices-packing-slips' ),
-				)
+					'description' =>
+						__( 'Changes the document links to a prettier URL scheme.', 'woocommerce-pdf-invoices-packing-slips' ) .
+						'<br>' .
+						'<strong>' . __( 'Note', 'woocommerce-pdf-invoices-packing-slips' ) . '</strong>: ' . sprintf(
+							/* translators: 1. Permalinks type, 2. Setting link, 3. Documentation link */
+							__( 'Pretty document links will not work when the %1$s is set to %2$s.', 'woocommerce-pdf-invoices-packing-slips' ),
+							'<a href="' . esc_url( admin_url( 'options-permalink.php' ) ) . '" target="_blank" rel="noopener noreferrer">' . __( 'permalink setting', 'woocommerce-pdf-invoices-packing-slips' ) . '</a>',
+							'<code>' . __( 'Plain', 'woocommerce-pdf-invoices-packing-slips' ) . '</code>',
+						) .
+						' '. '<a href="https://docs.wpovernight.com/woocommerce-pdf-invoices-packing-slips/document-pretty-link-incompatibility-with-plain-permalinks-structure/" target="_blank">' . __( 'Learn more', 'woocommerce-pdf-invoices-packing-slips' ) . '</a>'
+				),
 			),
 			array(
 				'type'     => 'setting',
@@ -885,6 +894,23 @@ class SettingsDebug {
 			),
 			array(
 				'type'     => 'setting',
+				'id'       => 'default_manual_document_number',
+				'title'    => __( 'Default manual document number', 'woocommerce-pdf-invoices-packing-slips' ),
+				'callback' => 'select',
+				'section'  => 'debug_settings',
+				'args'     => array(
+					'option_name' => $option_name,
+					'id'          => 'default_manual_document_number',
+					'default'     => 'zero',
+					'options'     => array(
+						'zero'                 => __( '0 (zero)', 'woocommerce-pdf-invoices-packing-slips' ),
+						'next_document_number' => __( 'Next document number', 'woocommerce-pdf-invoices-packing-slips' ),
+					),
+					'description' => __( 'Select the default value for the document number field in the "PDF document data" meta box when manually creating a new document.', 'woocommerce-pdf-invoices-packing-slips' ),
+				)
+			),
+			array(
+				'type'     => 'setting',
 				'id'       => 'enable_cleanup',
 				'title'    => __( 'Enable automatic cleanup', 'woocommerce-pdf-invoices-packing-slips' ),
 				'callback' => 'checkbox_text_input',
@@ -897,7 +923,7 @@ class SettingsDebug {
 					'text_input_size'    => 4,
 					'text_input_id'      => 'cleanup_days',
 					'text_input_default' => 7,
-					'description'        => __( "Automatically clean up PDF files stored in the temporary folder (used for email attachments)", 'woocommerce-pdf-invoices-packing-slips' ),
+					'description'        => __( 'Automatically clean up PDF files stored in the temporary folder (used for email attachments), and remove old document locks that prevent conflicts when generating document numbers.', 'woocommerce-pdf-invoices-packing-slips' ),
 				)
 			),
 			array(
@@ -1438,6 +1464,73 @@ class SettingsDebug {
 			'tools'    => __( 'Tools', 'woocommerce-pdf-invoices-packing-slips' ),
 			'numbers'  => __( 'Numbers', 'woocommerce-pdf-invoices-packing-slips' ),
 		) );
+	}
+
+	/**
+	 * Define settings categories for the Advanced tab.
+	 *
+	 * @return array
+	 */
+	public function get_settings_categories(): array {
+		$categories = array(
+			'filesystem_access' => array(
+				'title'   => __( 'File System & Access', 'woocommerce-pdf-invoices-packing-slips' ),
+				'members' => array(
+					'file_system_method',
+					'document_link_access_type',
+					'document_link_access_type_table',
+					'document_access_denied_redirect_page',
+					'document_custom_redirect_page',
+				),
+			),
+			'display_interaction' => array(
+				'title'   => __( 'Document Display & Interaction', 'woocommerce-pdf-invoices-packing-slips' ),
+				'members' => array(
+					'pretty_document_links',
+					'disable_preview',
+					'embed_images',
+					'html_output',
+				),
+			),
+			'document_management' => array(
+				'title'   => __( 'Document Management & Behavior', 'woocommerce-pdf-invoices-packing-slips' ),
+				'members' => array(
+					'calculate_document_numbers',
+					'enable_document_data_editing',
+					'default_manual_document_number',
+					'enable_cleanup',
+				),
+			),
+			'localization_translation' => array(
+				'title'   => __( 'Localization & Translation', 'woocommerce-pdf-invoices-packing-slips' ),
+				'members' => array(
+					'reload_attachment_translations',
+					'log_missing_translations',
+				),
+			),
+			'debugging_logging' => array(
+				'title'   => __( 'Debugging & Logging', 'woocommerce-pdf-invoices-packing-slips' ),
+				'members' => array(
+					'enable_debug',
+					'log_to_order_notes',
+					'semaphore_logs',
+				),
+			),
+			'versioning_stability' => array(
+				'title'   => __( 'Versioning & Stability', 'woocommerce-pdf-invoices-packing-slips' ),
+				'members' => array(
+					'check_unstable_versions',
+				),
+			),
+			'advanced_experimental' => array(
+				'title'   => __( 'Advanced / Experimental', 'woocommerce-pdf-invoices-packing-slips' ),
+				'members' => array(
+					'enable_danger_zone_tools',
+				),
+			),
+		);
+
+		return apply_filters( 'wpo_wcpdf_settings_debug_categories', $categories );
 	}
 
 	/**

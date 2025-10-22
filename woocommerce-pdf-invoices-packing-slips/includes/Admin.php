@@ -507,16 +507,27 @@ class Admin {
 			'high'
 		);
 
-		// create PDF buttons
-		add_meta_box(
-			'wpo_wcpdf-box',
-			__( 'Create PDF', 'woocommerce-pdf-invoices-packing-slips' ),
-			array( $this, 'pdf_actions_meta_box' ),
-			$screen_id,
-			'side',
-			'default'
-		);
+		if ( ! empty( \WPO_WCPDF()->documents->get_documents( 'enabled', 'pdf' ) ) ) {
+			// create PDF buttons
+			add_meta_box(
+				'wpo_wcpdf-box',
+				__( 'Create PDF', 'woocommerce-pdf-invoices-packing-slips' ),
+				array( $this, 'pdf_actions_meta_box' ),
+				$screen_id,
+				'side',
+				'default'
+			);
 
+			// Invoice number & date
+			add_meta_box(
+				'wpo_wcpdf-data-input-box',
+				__( 'PDF document data', 'woocommerce-pdf-invoices-packing-slips' ),
+				array( $this, 'data_input_box_content' ),
+				$screen_id,
+				'normal',
+				'default'
+			);
+		}
 
 		$ubl_documents = WPO_WCPDF()->documents->get_documents( 'enabled', 'ubl' );
 		if ( count( $ubl_documents ) > 0 ) {
@@ -530,16 +541,6 @@ class Admin {
 				'default'
 			);
 		}
-
-		// Invoice number & date
-		add_meta_box(
-			'wpo_wcpdf-data-input-box',
-			__( 'PDF document data', 'woocommerce-pdf-invoices-packing-slips' ),
-			array( $this, 'data_input_box_content' ),
-			$screen_id,
-			'normal',
-			'default'
-		);
 	}
 
 	/**
@@ -865,6 +866,14 @@ class Admin {
 		// Default number data
 		if ( ! isset( $current['number'] ) ) {
 			$number_settings = $document->get_number_settings();
+			$default_number  = 0;
+
+			if (
+				! empty( \WPO_WCPDF()->settings->debug_settings['default_manual_document_number'] ) &&
+				'next_document_number' === \WPO_WCPDF()->settings->debug_settings['default_manual_document_number']
+			) {
+				$default_number = $document->get_sequential_number_store()->get_next() ?? 0;
+			}
 
 			$current['number'] = array(
 				'prefix' => array(
@@ -872,7 +881,7 @@ class Admin {
 					'name'  => "{$name_prefix}number_prefix",
 				),
 				'plain' => array(
-					'value' => 0,
+					'value' => $default_number,
 					'name'  => "{$name_prefix}number_plain",
 				),
 				'suffix' => array(
@@ -1064,7 +1073,7 @@ class Admin {
 														'<strong>[' . esc_html( $document->slug ) . '_month]</strong>'
 													)
 												);
-												echo wc_help_tip( wp_kses_post( $tip_text ), true );
+												echo wc_help_tip( wp_kses_post( $tip_text ), true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 											?>
 										</label>
 										<input type="text" class="short" name="<?php echo esc_attr( $data['number']['prefix']['name'] ); ?>" id="<?php echo esc_attr( $data['number']['prefix']['name'] ); ?>" value="<?php echo esc_html( $data['number']['prefix']['value'] ); ?>" disabled="disabled">
@@ -1084,7 +1093,7 @@ class Admin {
 														'<strong>[' . esc_html( $document->slug ) . '_month]</strong>'
 													)
 												);
-												echo wc_help_tip( wp_kses_post( $tip_text ), true );
+												echo wc_help_tip( wp_kses_post( $tip_text ), true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 											?>
 										</label>
 										<input type="text" class="short" name="<?php echo esc_attr( $data['number']['suffix']['name'] ); ?>" id="<?php echo esc_attr( $data['number']['suffix']['name'] ); ?>" value="<?php echo esc_html( $data['number']['suffix']['value'] ); ?>" disabled="disabled">
@@ -1101,7 +1110,7 @@ class Admin {
 													'<code>123</code>',
 													'<code>000123</code>'
 												);
-												echo wc_help_tip( wp_kses_post( $tip_text ), true );
+												echo wc_help_tip( wp_kses_post( $tip_text ), true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 											?>
 										</label>
 										<input type="number" min="1" step="1" class="short" name="<?php echo esc_attr( $data['number']['padding']['name'] ); ?>" id="<?php echo esc_attr( $data['number']['padding']['name'] ); ?>" value="<?php echo absint( $data['number']['padding']['value'] ); ?>" disabled="disabled">
@@ -1140,7 +1149,7 @@ class Admin {
 									<div class="row-note">
 										<?php echo wp_kses_post( sprintf(
 											/* translators: %1$s: open anchor tag, %2$s: close anchor tag */
-											__( 'Manually changing the document\'s plain number also requires updating the next document number in the %1$sdocument settings%2$s.' ),
+											__( 'Manually changing the document\'s plain number also requires updating the next document number in the %1$sdocument settings%2$s.', 'woocommerce-pdf-invoices-packing-slips' ),
 											'<a href="' . esc_url( admin_url( 'admin.php?page=wpo_wcpdf_options_page&tab=documents&section=' . $document->get_type() ) ) . '#next_' . $document->slug . '_number" target="_blank">',
 											'</a>'
 										) ); ?>
@@ -1208,6 +1217,8 @@ class Admin {
 					<?php do_action( 'wpo_wcpdf_meta_box_after_document_notes', $document, $document->order ); ?>
 				<?php endif; ?>
 			</section>
+
+			<?php do_action( 'wpo_wcpdf_meta_box_before_document_buttons', $document, $data ); ?>
 
 			<!-- Save/Cancel buttons -->
 			<section class="wcpdf-data-fields-section wpo-wcpdf-document-buttons">
@@ -1745,8 +1756,8 @@ class Admin {
 
 			$data['notes'] = wp_kses( $form_data["{$key_prefix}notes"], $allowed_html );
 		}
-
-		return $data;
+		
+		return apply_filters( 'wpo_wcpdf_order_document_form_data', $data, $form_data, $document );
 	}
 
 	public function add_invoice_number_to_order_report( $response ) {

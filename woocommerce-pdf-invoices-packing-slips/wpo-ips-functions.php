@@ -1188,6 +1188,7 @@ function wpo_wcpdf_get_order_customer_vat_number( \WC_Abstract_Order $order ): ?
 		'_billing_vat_id',        // Germanized Pro
 		'_shipping_vat_id',       // Germanized Pro (alternative)
 		'_billing_dic',           // EU/UK VAT Manager for WooCommerce
+		'_billing_eu_vat',        // WooCommerce Eu Vat & B2B (WCEV)
 	), $order );
 
 	$vat_number = null;
@@ -1342,7 +1343,7 @@ function wpo_wcpdf_get_latest_releases_from_github( string $owner = 'wpovernight
 		$tag  = $release['tag_name'];
 		$name = ltrim( $release['name'], 'v' );
 
-		if ( preg_match( '/-pr\d+/i', $tag ) ) {
+		if ( preg_match( '/-(pr|i)\d+(?:\.\d+)?/i', $tag ) ) {
 			continue;
 		}
 
